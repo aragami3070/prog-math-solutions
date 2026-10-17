@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE crawl_runs\n        SET\n            status = $2,\n            finished_at = NOW(),\n            error = COALESCE($3, error)\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fb6025b6cbe273b4b54fb519f80ac2e5f1dafb0a027b65ee380bafb3bb6b9f20"
+}

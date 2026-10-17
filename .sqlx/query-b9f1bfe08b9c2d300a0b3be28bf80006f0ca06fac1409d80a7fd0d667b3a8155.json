@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO documents (\n            source, native_id, canonical_url, title, body_text,\n            content_hash, completeness, completeness_reason,\n            metadata, parser_version, fetch_id\n        )\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'html-v1', $10)\n        ON CONFLICT (source, native_id) DO UPDATE SET\n            canonical_url = EXCLUDED.canonical_url,\n            title = EXCLUDED.title,\n            body_text = EXCLUDED.body_text,\n            content_hash = EXCLUDED.content_hash,\n            completeness = EXCLUDED.completeness,\n            completeness_reason = EXCLUDED.completeness_reason,\n            metadata = EXCLUDED.metadata,\n            parser_version = EXCLUDED.parser_version,\n            fetch_id = EXCLUDED.fetch_id,\n            last_seen_at = NOW()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b9f1bfe08b9c2d300a0b3be28bf80006f0ca06fac1409d80a7fd0d667b3a8155"
+}

@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            COUNT(*) AS \"document_requests!\",\n            COUNT(*) FILTER (\n                WHERE status IS NULL OR status >= 400 OR error IS NOT NULL\n            ) AS \"http_errors!\"\n        FROM fetches\n        WHERE kind = 'document'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_requests!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "http_errors!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "3601a8f6369484a283fca4669b0425f6f65759a7e9e216d375e8c68c5c8037ac"
+}

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE crawl_queue\n        SET status = CASE WHEN $3::TEXT IS NULL THEN 'done' ELSE 'failed' END,\n            error = $3\n        WHERE id = $2 AND run_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ff7a4029b21c73ca31ebdc13b347d02295c589e625748ea5bfd9d0e23ead207d"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE crawl_runs\n        SET succeeded = succeeded + 1\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "07f3b584ac7bca6cc664d26d60d4c96c756c09bad36094edd6e26c9809ada216"
+}

@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            id,\n            source,\n            native_id,\n            canonical_url,\n            title,\n            LEFT(body_text, 320) AS \"excerpt!\",\n            CHAR_LENGTH(body_text)::BIGINT AS \"text_chars!\",\n            completeness,\n            completeness_reason,\n            first_seen_at,\n            last_seen_at\n        FROM documents\n        ORDER BY first_seen_at DESC, id DESC\n        LIMIT $1 OFFSET $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "native_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "canonical_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "excerpt!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "text_chars!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "completeness",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "completeness_reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "first_seen_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "last_seen_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8d97c79b49aeb0f7f474dabc2cb42e67ee4994572d753be908e96392d7a5b430"
+}

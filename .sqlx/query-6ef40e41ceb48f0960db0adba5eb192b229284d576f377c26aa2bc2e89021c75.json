@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO crawl_runs (source, status, requested)\n        VALUES ($1, 'running', $2)\n        RETURNING\n            id, source, status, requested, succeeded, failed,\n            started_at, finished_at, error\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "requested",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "succeeded",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "failed",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "finished_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "error",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "6ef40e41ceb48f0960db0adba5eb192b229284d576f377c26aa2bc2e89021c75"
+}

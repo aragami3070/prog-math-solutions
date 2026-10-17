@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE crawl_runs\n        SET\n            status = 'interrupted',\n            finished_at = NOW(),\n            error = 'collector process interrupted'\n        WHERE status = 'running'\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "6562c2e1018d50e8accdc0c3ebc9e0aed70631732c6b3454cf760165b7174d4b"
+}

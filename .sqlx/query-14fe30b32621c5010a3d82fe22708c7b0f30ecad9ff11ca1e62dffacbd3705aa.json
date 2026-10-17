@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE crawl_runs\n        SET failed = failed + 1, error = $2\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "14fe30b32621c5010a3d82fe22708c7b0f30ecad9ff11ca1e62dffacbd3705aa"
+}

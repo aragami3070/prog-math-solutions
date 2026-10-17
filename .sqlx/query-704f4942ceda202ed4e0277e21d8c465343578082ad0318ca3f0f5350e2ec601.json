@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT paused, pause_reason\n        FROM crawl_sources\n        WHERE source = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "paused",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "pause_reason",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "704f4942ceda202ed4e0277e21d8c465343578082ad0318ca3f0f5350e2ec601"
+}

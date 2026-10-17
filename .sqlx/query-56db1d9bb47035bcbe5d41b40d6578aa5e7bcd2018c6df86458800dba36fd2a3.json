@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": " SELECT pg_try_advisory_lock(736251094) AS \"locked!\" ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "locked!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "56db1d9bb47035bcbe5d41b40d6578aa5e7bcd2018c6df86458800dba36fd2a3"
+}

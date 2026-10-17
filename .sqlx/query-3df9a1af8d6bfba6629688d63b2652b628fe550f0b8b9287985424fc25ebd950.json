@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE crawl_queue SET status = 'pending', error = NULL\n        WHERE run_id = $1 AND status = 'failed'\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3df9a1af8d6bfba6629688d63b2652b628fe550f0b8b9287985424fc25ebd950"
+}

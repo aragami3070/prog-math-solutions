@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE crawl_sources\n        SET paused = FALSE, pause_reason = NULL\n        WHERE source = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b5c0b75f13ec3b4b30fce0baec8b10ad7e0473cd61240c3c0e1c9be4dc262aa2"
+}
