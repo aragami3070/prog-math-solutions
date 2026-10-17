@@ -1,0 +1,9 @@
+/target/
+/web/node_modules/
+/web/dist/
+/web/.vitest/
+/.env
+/.env.*
+!/.env.example
+/data/
+*.log
