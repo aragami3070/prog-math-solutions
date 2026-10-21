@@ -85,6 +85,12 @@ async fn openapi_and_unknown_api_route() {
     let body = response.into_body().collect().await.unwrap().to_bytes();
     let spec: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert!(spec["paths"]["/api/documents"]["get"].is_object());
+    assert!(spec["paths"]["/api/sources/export"]["get"].is_object());
+    assert_eq!(
+        spec["components"]["schemas"]["ExportFormat"]["enum"],
+        serde_json::json!(["json", "jsonl", "csv", "zip"])
+    );
+    assert_local_refs_resolve(&spec, &spec);
     assert!(spec["components"]["securitySchemes"].is_null());
     for path in ["/api/crawls", "/api/sources/{source}/resume"] {
         assert!(spec["paths"][path]["post"]["security"].is_null());
@@ -95,4 +101,49 @@ async fn openapi_and_unknown_api_route() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+fn assert_local_refs_resolve(value: &serde_json::Value, document: &serde_json::Value) {
+    match value {
+        serde_json::Value::Object(object) => {
+            if let Some(reference) = object.get("$ref").and_then(serde_json::Value::as_str)
+                && let Some(pointer) = reference.strip_prefix('#')
+            {
+                assert!(
+                    document.pointer(pointer).is_some(),
+                    "unresolved OpenAPI reference: {reference}"
+                );
+            }
+            for child in object.values() {
+                assert_local_refs_resolve(child, document);
+            }
+        }
+        serde_json::Value::Array(array) => {
+            for child in array {
+                assert_local_refs_resolve(child, document);
+            }
+        }
+        _ => {}
+    }
+}
+
+#[tokio::test]
+async fn invalid_export_parameters_are_rejected_before_database() {
+    for query in [
+        "format=xml",
+        "source=github",
+        "complete_only=yes",
+        "page=1",
+        "spreadsheet_safe=maybe",
+    ] {
+        let response = app()
+            .oneshot(
+                Request::get(format!("/api/sources/export?{query}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
 }

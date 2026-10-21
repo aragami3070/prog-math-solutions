@@ -9,6 +9,7 @@ use crate::{
     crawler::Crawler,
     models::{
         crawls::{CrawlRequest, CrawlRun},
+        exports::ExportFormat,
         sources::{DocumentPage, DocumentSummary, Source},
         statistics::{SourceStats, Statistics},
     },
@@ -16,6 +17,8 @@ use crate::{
 use axum::{Json, Router, extract::DefaultBodyLimit, http::StatusCode};
 use errors::ErrorBody;
 use sqlx::PgPool;
+use std::sync::Arc;
+use tokio::sync::Semaphore;
 use tower_http::{
     services::{ServeDir, ServeFile},
     trace::TraceLayer,
@@ -27,6 +30,7 @@ use utoipa_swagger_ui::SwaggerUi;
 pub struct AppState {
     pub pool: PgPool,
     pub crawler: Crawler,
+    pub export_slots: Arc<Semaphore>,
 }
 
 impl AppState {
@@ -38,6 +42,7 @@ impl AppState {
                 config.crawl_delay,
             ),
             pool,
+            export_slots: Arc::new(Semaphore::new(1)),
         }
     }
 }
@@ -47,12 +52,14 @@ impl AppState {
     paths(
         health::check,
         sources::documents,
+        sources::export,
         statistics::get_statistics,
         crawls::start,
         sources::resume
     ),
     components(schemas(
         Source,
+        ExportFormat,
         CrawlRequest,
         CrawlRun,
         DocumentSummary,

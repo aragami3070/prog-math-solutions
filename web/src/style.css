@@ -71,6 +71,9 @@ select { font-size: 12px; border: 1px solid #d2d8cb; padding: 5px 7px; border-ra
 .crawl-controls p { font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
 .crawl-controls form { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .crawl-controls label { font-size: 12px; }
+.export-options { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-top: 16px; }
+.export-options input { accent-color: #657d40; }
+.stats-export { margin-top: 28px; }
 .source-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .source-card h3 { margin: 0; font-size: 15px; }
 .state { color: #7b896e; font-size: 10px; }

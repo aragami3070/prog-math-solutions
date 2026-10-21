@@ -1,10 +1,53 @@
 use super::errors::Error;
 use crate::models::{
+    exports::ExportRow,
     pagination::Pagination,
     sources::{DocumentSummary, ParsedDocument, Source},
     statistics::SourceStats,
 };
 use sqlx::{Postgres, Transaction};
+
+pub async fn export_snapshot_time(
+    tx: &mut Transaction<'_, Postgres>,
+) -> Result<chrono::DateTime<chrono::Utc>, Error> {
+    Ok(sqlx::query_scalar!(
+        r#"
+        SELECT transaction_timestamp() AS "snapshot_at!"
+        "#,
+    )
+    .fetch_one(&mut **tx)
+    .await?)
+}
+
+pub async fn export_batch(
+    tx: &mut Transaction<'_, Postgres>,
+    source: Option<Source>,
+    complete_only: bool,
+    after: &str,
+) -> Result<Vec<ExportRow>, Error> {
+    Ok(sqlx::query_as!(
+        ExportRow,
+        r#"
+        SELECT
+            d.source, d.native_id, d.canonical_url, d.title, d.body_text,
+            d.content_hash, d.completeness, d.completeness_reason,
+            d.metadata, d.parser_version, d.fetch_id,
+            f.fetched_at, d.first_seen_at, d.last_seen_at
+        FROM documents AS d
+        JOIN fetches AS f ON f.id = d.fetch_id
+        WHERE ($1::TEXT IS NULL OR d.source = $1)
+          AND (NOT $2 OR d.completeness = 'complete')
+          AND (d.source || ':' || d.native_id) COLLATE "C" > $3 COLLATE "C"
+        ORDER BY (d.source || ':' || d.native_id) COLLATE "C"
+        LIMIT 32
+        "#,
+        source.map(Source::as_str),
+        complete_only,
+        after,
+    )
+    .fetch_all(&mut **tx)
+    .await?)
+}
 
 pub async fn count_documents(tx: &mut Transaction<'_, Postgres>) -> Result<i64, Error> {
     Ok(sqlx::query_scalar!(

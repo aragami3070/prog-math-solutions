@@ -42,6 +42,13 @@ impl From<use_cases::sources::errors::Error> for Error {
                 Self(StatusCode::BAD_REQUEST, error.to_string())
             }
             use_cases::sources::errors::Error::Repository(error) => Self::database(error),
+            error => {
+                tracing::error!(%error, "corpus export failed");
+                Self(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Could not generate corpus export".into(),
+                )
+            }
         }
     }
 }

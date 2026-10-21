@@ -1,0 +1,102 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            d.source, d.native_id, d.canonical_url, d.title, d.body_text,\n            d.content_hash, d.completeness, d.completeness_reason,\n            d.metadata, d.parser_version, d.fetch_id,\n            f.fetched_at, d.first_seen_at, d.last_seen_at\n        FROM documents AS d\n        JOIN fetches AS f ON f.id = d.fetch_id\n        WHERE ($1::TEXT IS NULL OR d.source = $1)\n          AND (NOT $2 OR d.completeness = 'complete')\n          AND (d.source || ':' || d.native_id) COLLATE \"C\" > $3 COLLATE \"C\"\n        ORDER BY (d.source || ':' || d.native_id) COLLATE \"C\"\n        LIMIT 32\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "native_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "canonical_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "body_text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "content_hash",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "completeness",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "completeness_reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 9,
+        "name": "parser_version",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "fetch_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "fetched_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "first_seen_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "last_seen_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "12932e8eb55141901cf3c1618952ddc0cec45a9e12b6d9d7b40d30a78578aedf"
+}

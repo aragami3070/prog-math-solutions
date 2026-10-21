@@ -1,7 +1,16 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { get, pagination, startCrawl } from "./api";
+import { exportUrl, get, pagination, startCrawl } from "./api";
 
 afterEach(() => vi.unstubAllGlobals());
+
+it("exports the whole selected source with explicit completeness and CSV options", () => {
+  const url = new URL(exportUrl("zip", "internals", true, true), "http://localhost");
+  expect(url.pathname).toBe("/api/sources/export");
+  expect(Object.fromEntries(url.searchParams)).toEqual({ format: "zip", source: "internals", complete_only: "true", spreadsheet_safe: "true" });
+  const all = new URL(exportUrl("jsonl"), "http://localhost");
+  expect(all.searchParams.has("source")).toBe(false);
+  expect(all.searchParams.has("page")).toBe(false);
+});
 describe("pagination", () => {
   it("validates URL values", () => {
     expect(pagination({ page: "2", page_size: "50" })).toEqual({ page: 2, page_size: 50 });

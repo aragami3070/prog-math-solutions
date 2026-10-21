@@ -5,6 +5,7 @@ import { createRootRoute, createRoute, createRouter, Link, Outlet, RouterProvide
 import { date, get, number, pagination, sourceName, type DocumentPage, type Statistics } from "./api";
 import "./style.css";
 import { CrawlControls } from "./CrawlControls";
+import { ExportControls } from "./ExportControls";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 5_000 } } });
 
@@ -64,6 +65,7 @@ function Stats() {
       <div className="section-heading"><h2>Последние запуски</h2><span>Последние 10</span></div>
       {data.recent_runs.length === 0 ? <div className="notice">Сбор ещё не запускался. Сервер сам не обращается к источникам.</div> : <div className="table-wrap"><table><thead><tr><th>Запуск / источник</th><th>Состояние</th><th>Обработано / найдено страниц</th><th>Ошибки</th><th>Начало</th></tr></thead><tbody>{data.recent_runs.map(run => <tr key={run.id}><td><strong>#{run.id} · {sourceName(run.source)}</strong>{run.error && <details><summary>Причина / подробности</summary><p>{run.error}</p></details>}</td><td><Badge value={run.status} /></td><td>{run.succeeded} / {run.requested}</td><td>{run.failed}</td><td>{date(run.started_at)}</td></tr>)}</tbody></table></div>}
     </>}
+    <div className="stats-export"><ExportControls /></div>
   </>;
 }
 function Metric({ label, value, accent }: { label: string; value: number; accent?: boolean }) { return <section className={`metric ${accent ? "metric-accent" : ""}`}><span>{label}</span><strong>{number(value)}</strong></section>; }

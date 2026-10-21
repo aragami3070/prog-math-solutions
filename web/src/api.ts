@@ -11,6 +11,14 @@ export interface DocumentSummary {
   first_seen_at: string;
   last_seen_at: string;
 }
+
+export type ExportFormat = "jsonl" | "json" | "csv" | "zip";
+
+export function exportUrl(format: ExportFormat, source = "", completeOnly = false, spreadsheetSafe = false) {
+  const query = new URLSearchParams({ format, complete_only: String(completeOnly), spreadsheet_safe: String(spreadsheetSafe) });
+  if (source) query.set("source", source);
+  return `/api/sources/export?${query}`;
+}
 export interface DocumentPage {
   items: DocumentSummary[];
   page: number;
