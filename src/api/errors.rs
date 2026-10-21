@@ -61,6 +61,7 @@ impl From<use_cases::crawls::errors::Error> for Error {
             CrawlError::Busy | CrawlError::Paused(_) => {
                 Self(StatusCode::CONFLICT, error.to_string())
             }
+            CrawlError::Sources(error) => Self::from(error),
             CrawlError::Repository(error) => Self::database(error),
         }
     }

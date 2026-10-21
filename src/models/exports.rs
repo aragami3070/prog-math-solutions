@@ -44,6 +44,7 @@ pub struct ExportQuery {
 }
 
 pub struct ExportRow {
+    pub id: i64,
     pub source: String,
     pub native_id: String,
     pub canonical_url: String,
@@ -52,12 +53,33 @@ pub struct ExportRow {
     pub content_hash: String,
     pub completeness: String,
     pub completeness_reason: String,
-    pub metadata: Value,
     pub parser_version: String,
-    pub fetch_id: i64,
     pub fetched_at: DateTime<Utc>,
     pub first_seen_at: DateTime<Utc>,
     pub last_seen_at: DateTime<Utc>,
+}
+
+pub struct ExportPost {
+    pub document_id: i64,
+    pub post_number: i32,
+    pub author: Option<String>,
+    pub published_at: Option<DateTime<Utc>>,
+    pub text: String,
+    pub code: Value,
+}
+
+pub struct ExportLink {
+    pub document_id: i64,
+    pub post_number: i32,
+    pub target_url: String,
+    pub anchor_text: Option<String>,
+}
+
+pub struct ExportPage {
+    pub document_id: i64,
+    pub page_no: i32,
+    pub url: String,
+    pub fetch_id: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, ToSchema)]
@@ -86,7 +108,7 @@ pub struct ExportDocument {
     pub fetch_ids: Vec<i64>,
     pub parser_version: String,
     pub license_provenance: Value,
-    /// Original parser metadata, including per-page fetch IDs for Internals.
+    /// License source and the fetched pages (number, URL, fetch ID) behind the document.
     pub metadata: Value,
 }
 

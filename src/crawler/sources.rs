@@ -1,9 +1,13 @@
 use anyhow::{Result, bail, ensure};
+use chrono::{DateTime, Utc};
 use scraper::{ElementRef, Html, Selector};
-use serde_json::json;
+use std::collections::HashSet;
 use url::Url;
 
-use crate::models::sources::{ParsedDocument, Source};
+use crate::models::sources::{ParsedLink, ParsedPage, ParsedPost, Source};
+
+/// Stored with every document; bump when parsing changes what is extracted.
+pub const PARSER_VERSION: &str = "html-v2";
 
 pub fn validate_url(source: Source, input: &str) -> Result<(Url, String)> {
     let mut url = Url::parse(input)?;
@@ -62,7 +66,36 @@ fn text(element: ElementRef<'_>) -> String {
         .to_string()
 }
 
-pub fn parse(source: Source, url: &str, html: &str) -> Result<ParsedDocument> {
+fn page_number(url: &Url) -> i32 {
+    url.query_pairs()
+        .find(|(key, _)| key == "page")
+        .and_then(|(_, value)| value.parse().ok())
+        .unwrap_or(1)
+}
+
+fn post_links(page_url: &Url, body: ElementRef<'_>) -> Vec<ParsedLink> {
+    let mut seen = HashSet::new();
+    body.select(&selector("a[href]"))
+        .filter_map(|a| {
+            let target = page_url
+                .join(a.value().attr("href")?)
+                .ok()
+                .filter(|u| matches!(u.scheme(), "http" | "https"))?
+                .to_string();
+            let anchor = text(a);
+            seen.insert(target.clone()).then(|| ParsedLink {
+                target_url: target,
+                anchor_text: (!anchor.is_empty()).then_some(anchor),
+            })
+        })
+        .collect()
+}
+
+fn code_blocks(body: ElementRef<'_>) -> Vec<String> {
+    body.select(&selector("pre")).map(text).collect()
+}
+
+pub fn parse(source: Source, url: &str, html: &str) -> Result<ParsedPage> {
     let page_url = super::discovery::normalize(source, url)?;
     let mut canonical = page_url.clone();
     canonical.set_query(None);
@@ -74,18 +107,21 @@ pub fn parse(source: Source, url: &str, html: &str) -> Result<ParsedDocument> {
     }
     .unwrap_or_default();
     ensure!(!title.is_empty(), "document title not found");
-    let mut sections = Vec::new();
-    let (completeness, reason) = match source {
+    let mut posts = Vec::new();
+    match source {
         Source::Rfc => {
             let main = document
                 .select(&selector("main"))
                 .next()
                 .ok_or_else(|| anyhow::anyhow!("RFC main element not found"))?;
-            sections.push(json!({"text": text(main), "code": main.select(&selector("pre")).map(text).collect::<Vec<_>>() }));
-            (
-                "complete",
-                "Single RFC HTML document; main element extracted",
-            )
+            posts.push(ParsedPost {
+                post_number: 1,
+                author: None,
+                published_at: None,
+                text: text(main),
+                code: code_blocks(main),
+                links: post_links(&url, main),
+            });
         }
         Source::Internals => {
             for post in document.select(&selector(".crawler-post")) {
@@ -95,67 +131,52 @@ pub fn parse(source: Source, url: &str, html: &str) -> Result<ParsedDocument> {
                 else {
                     continue;
                 };
-                sections.push(json!({
-                    "post_id": post.value().attr("id"),
-                    "author": post.select(&selector("[itemprop='author'] [itemprop='name'], .creator [itemprop='name']")).next().map(text),
-                    "published_at": post.select(&selector("time")).next().and_then(|t| t.value().attr("datetime")),
-                    "text": text(body),
-                    "code": body.select(&selector("pre")).map(text).collect::<Vec<_>>()
-                }));
-            }
-            // The first HTML response is not proof that all Discourse posts were fetched.
-            let has_next = document
-                .select(&selector("a[rel='next'], link[rel='next']"))
-                .next()
-                .is_some();
-            if has_next {
-                (
-                    "partial",
-                    "HTML advertises a next page; collected pages do not prove full topic coverage",
-                )
-            } else {
-                (
-                    "unknown",
-                    "Full Discourse post count has not been verified; not counted as a complete topic",
-                )
+                let post_number = post
+                    .value()
+                    .attr("id")
+                    .and_then(|id| id.strip_prefix("post_"))
+                    .and_then(|number| number.parse::<i32>().ok())
+                    .filter(|number| *number >= 1)
+                    .ok_or_else(|| anyhow::anyhow!("post without a numeric post_N id"))?;
+                posts.push(ParsedPost {
+                    post_number,
+                    author: post
+                        .select(&selector(
+                            "[itemprop='author'] [itemprop='name'], .creator [itemprop='name']",
+                        ))
+                        .next()
+                        .map(text),
+                    published_at: post
+                        .select(&selector("time"))
+                        .next()
+                        .and_then(|t| t.value().attr("datetime"))
+                        .and_then(|t| DateTime::parse_from_rfc3339(t).ok())
+                        .map(|t| t.with_timezone(&Utc)),
+                    text: text(body),
+                    code: code_blocks(body),
+                    links: post_links(&url, body),
+                });
             }
         }
-    };
-    let body_text = sections
-        .iter()
-        .filter_map(|s| s["text"].as_str())
-        .collect::<Vec<_>>()
-        .join("\n\n");
+    }
+    let body_chars: usize = posts.iter().map(|post| post.text.chars().count()).sum();
     ensure!(
-        body_text.chars().count() >= 40,
+        body_chars >= 40,
         "main text missing or too short; page may be a challenge or unsupported layout"
     );
-    let links_selector = selector(match source {
-        Source::Rfc => "main a[href]",
-        Source::Internals => {
-            ".crawler-post .post a[href], .crawler-post [itemprop='articleBody'] a[href]"
-        }
-    });
-    let links: Vec<_> = document
-        .select(&links_selector)
-        .filter_map(|a| {
-            url.join(a.value().attr("href")?)
-                .ok()
-                .filter(|u| matches!(u.scheme(), "http" | "https"))
-                .map(|u| u.to_string())
-        })
-        .collect();
-    Ok(ParsedDocument {
+    // Completeness is judged from the collected page chain, not from one page.
+    let has_next = document
+        .select(&selector("a[rel='next'], link[rel='next']"))
+        .next()
+        .is_some();
+    Ok(ParsedPage {
         native_id,
         canonical_url: url.to_string(),
         title,
-        body_text,
-        completeness,
-        completeness_reason: reason.into(),
-        metadata: json!({"page_url": page_url.as_str(), "sections": sections, "links": links, "license_source": match source {
-            Source::Internals => "https://internals.rust-lang.org/tos",
-            Source::Rfc => "https://rust-lang.github.io/rfcs/#license"
-        }}),
+        page_no: page_number(&page_url),
+        page_url: page_url.to_string(),
+        has_next,
+        posts,
     })
 }
 
@@ -195,27 +216,34 @@ mod tests {
             include_str!("../../tests/fixtures/rfc.html"),
         )
         .unwrap();
-        assert_eq!(doc.completeness, "complete");
-        assert!(!doc.body_text.contains("Navigation"));
-        assert!(
-            doc.metadata["sections"][0]["code"][0]
-                .as_str()
-                .unwrap()
-                .contains("\n")
-        );
+        assert_eq!((doc.page_no, doc.has_next, doc.posts.len()), (1, false, 1));
+        assert!(!doc.posts[0].text.contains("Navigation"));
+        assert!(doc.posts[0].code[0].contains('\n'));
     }
 
     #[test]
-    fn internals_does_not_claim_completeness() {
+    fn internals_page_reports_chain_position_and_post_details() {
         let doc = parse(
             Source::Internals,
             "https://internals.rust-lang.org/t/example/42",
             include_str!("../../tests/fixtures/internals.html"),
         )
         .unwrap();
-        assert_eq!(doc.completeness, "partial");
-        assert_eq!(doc.metadata["sections"][0]["author"], "example-author");
-        assert!(!doc.body_text.contains("Navigation"));
+        assert_eq!((doc.page_no, doc.has_next), (1, true));
+        let post = &doc.posts[0];
+        assert_eq!(
+            (post.post_number, post.author.as_deref()),
+            (1, Some("example-author"))
+        );
+        assert!(post.published_at.is_some());
+        assert!(!post.text.contains("Navigation"));
+        let page_two = parse(
+            Source::Internals,
+            "https://internals.rust-lang.org/t/example/42?page=2",
+            include_str!("../../tests/fixtures/internals.html"),
+        )
+        .unwrap();
+        assert_eq!(page_two.page_no, 2);
     }
 
     #[test]

@@ -12,6 +12,12 @@ pub enum Error {
     Zip(#[from] zip::result::ZipError),
     #[error("export task failed")]
     Task(#[from] tokio::task::JoinError),
+    #[error("stored fetch {fetch_id} ({url}) could not be parsed: {reason}")]
+    Reparse {
+        fetch_id: i64,
+        url: String,
+        reason: String,
+    },
     #[error(transparent)]
     Repository(#[from] crate::repository::errors::Error),
 }

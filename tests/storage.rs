@@ -106,7 +106,7 @@ async fn collection_lifecycle(pool: PgPool) {
             run.id,
             Source::Rfc,
             fetch_id,
-            parse(Source::Rfc, URL, HTML).unwrap(),
+            &parse(Source::Rfc, URL, HTML).unwrap(),
         )
         .await
         .unwrap();
@@ -279,7 +279,7 @@ async fn caller_controls_commit_and_rollback(pool: PgPool) {
         run.id,
         Source::Rfc,
         fetch_id,
-        parse(Source::Rfc, URL, HTML).unwrap(),
+        &parse(Source::Rfc, URL, HTML).unwrap(),
     )
     .await
     .unwrap();
@@ -336,7 +336,7 @@ async fn crawl_frontier_checkpoints_deduplicates_and_resumes(pool: PgPool) {
     let page = || CollectedPage {
         id: seed.id,
         fetch_id: 0, // Navigation pages do not create a document.
-        document: None,
+        parsed: None,
         links: vec![seed.url.clone(), URL.into(), URL.into()],
     };
     crawls::complete_page::execute(&mut tx, run.id, Source::Rfc, page())
@@ -424,7 +424,7 @@ async fn crawl_frontier_checkpoints_deduplicates_and_resumes(pool: PgPool) {
         CollectedPage {
             id: doc_page.id,
             fetch_id,
-            document: Some(parse(Source::Rfc, URL, HTML).unwrap()),
+            parsed: Some(parse(Source::Rfc, URL, HTML).unwrap()),
             links: vec![seed.url, URL.into()],
         },
     )

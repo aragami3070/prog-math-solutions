@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO document_pages (document_id, page_no, url, fetch_id, has_next, fetched_at)\n        VALUES ($1, $2, $3, $4, $5, (SELECT fetched_at FROM fetches WHERE id = $4))\n        ON CONFLICT (document_id, page_no) DO UPDATE SET\n            url = EXCLUDED.url,\n            fetch_id = EXCLUDED.fetch_id,\n            has_next = EXCLUDED.has_next,\n            fetched_at = EXCLUDED.fetched_at\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int4",
+        "Text",
+        "Int8",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "203373041e4788ea01b46c4b4a5bee8ed5bfacbb72ed5c762378509fe0abd2af"
+}

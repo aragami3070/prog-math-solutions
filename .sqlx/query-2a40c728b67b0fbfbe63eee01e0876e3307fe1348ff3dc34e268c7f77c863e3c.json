@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT document_id, post_number, author, published_at, text, code\n        FROM posts\n        WHERE document_id = ANY($1)\n        ORDER BY document_id, post_number\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "post_number",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "author",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "published_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "code",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8Array"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "2a40c728b67b0fbfbe63eee01e0876e3307fe1348ff3dc34e268c7f77c863e3c"
+}

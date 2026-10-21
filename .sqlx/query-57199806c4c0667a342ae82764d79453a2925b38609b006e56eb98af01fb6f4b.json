@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO links (document_id, post_id, target_url, anchor_text)\n        SELECT $1, $2, t.target, NULLIF(t.anchor, '')\n        FROM UNNEST($3::TEXT[], $4::TEXT[]) AS t(target, anchor)\n        ON CONFLICT (post_id, target_url) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "57199806c4c0667a342ae82764d79453a2925b38609b006e56eb98af01fb6f4b"
+}

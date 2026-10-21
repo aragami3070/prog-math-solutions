@@ -66,9 +66,10 @@ async fn insert(pool: &PgPool, source: Source, id: usize) {
     .unwrap();
     let mut doc = parse(source, &url, html).unwrap();
     doc.title = "=formula, \"quoted\"".into();
-    doc.body_text
+    doc.posts[0]
+        .text
         .push_str("\nКириллица, \"кавычки\"\r\nnew line");
-    crawls::save_document::execute(&mut tx, run.id, source, fetch_id, doc)
+    crawls::save_document::execute(&mut tx, run.id, source, fetch_id, &doc)
         .await
         .unwrap();
     tx.commit().await.unwrap();

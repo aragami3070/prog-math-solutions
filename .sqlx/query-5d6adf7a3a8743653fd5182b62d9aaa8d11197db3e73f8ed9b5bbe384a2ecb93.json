@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT document_id, page_no, url, fetch_id\n        FROM document_pages\n        WHERE document_id = ANY($1)\n        ORDER BY document_id, page_no\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "page_no",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "fetch_id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8Array"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "5d6adf7a3a8743653fd5182b62d9aaa8d11197db3e73f8ed9b5bbe384a2ecb93"
+}

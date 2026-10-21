@@ -102,7 +102,7 @@ async fn collect(
                 .filter(|url| transport.allowed(url))
                 .map(String::from)
                 .collect();
-            let document = if discovery::is_document(plan.source, &response.url) {
+            let parsed = if discovery::is_document(plan.source, &response.url) {
                 Some(sources::parse(
                     plan.source,
                     response.url.as_str(),
@@ -119,7 +119,7 @@ async fn collect(
                 .complete_page(CollectedPage {
                     id: page.id,
                     fetch_id: response.fetch_id,
-                    document,
+                    parsed,
                     links: discovered.clone(),
                 })
                 .await?;

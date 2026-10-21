@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT page_no, has_next\n        FROM document_pages\n        WHERE document_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "page_no",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "has_next",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "244f4dbaf55f784f0e008ff7456abf05c5fe552b9d200eaf2355707b82936768"
+}

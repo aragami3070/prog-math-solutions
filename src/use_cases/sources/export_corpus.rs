@@ -1,13 +1,20 @@
 use super::errors::Error;
 use crate::{
-    models::exports::{ExportArtifact, ExportDocument, ExportFormat, ExportQuery, ExportRow},
+    models::{
+        exports::{
+            ExportArtifact, ExportDocument, ExportFormat, ExportLink, ExportPage, ExportPost,
+            ExportQuery, ExportRow,
+        },
+        sources::Source,
+    },
     repository::sources,
 };
+use chrono::{DateTime, SecondsFormat, Utc};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use sqlx::{Postgres, Transaction};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     io::{Seek, SeekFrom, Write},
 };
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
@@ -74,8 +81,11 @@ pub async fn execute(
         if batch.is_empty() {
             break;
         }
+        let ids: Vec<i64> = batch.iter().map(|row| row.id).collect();
+        let mut parts = Batch::load(tx, &ids).await?;
         for row in batch {
-            let doc = canonical(row);
+            let id = row.id;
+            let doc = canonical(row, parts.take(id));
             after = doc.document_id.clone();
             let bytes = serde_json::to_vec(&doc)?;
             corpus_hash.update(&bytes);
@@ -191,46 +201,110 @@ async fn checksum(file: &mut tokio::fs::File) -> Result<(u64, String), Error> {
     Ok((size, format!("{:x}", hash.finalize())))
 }
 
-fn canonical(row: ExportRow) -> ExportDocument {
-    let document_id = format!("{}:{}", row.source, row.native_id);
-    let mut authors = BTreeSet::new();
-    let mut sections = Vec::new();
-    let mut published_at = None;
-    let license = json!({"source_url": row.metadata["license_source"], "license_id": null, "status": "unresolved"});
-    if let Some(parts) = row.metadata["sections"].as_array() {
-        for (index, part) in parts.iter().enumerate() {
-            if let Some(author) = part["author"].as_str() {
-                authors.insert(author.to_owned());
-            }
-            // Only the first post establishes a topic's publication time.
-            if part["post_id"].as_str() == Some("post_1") {
-                published_at = part["published_at"].as_str().and_then(|v| v.parse().ok());
-            }
-            let key = part["post_id"]
-                .as_str()
-                .map(str::to_owned)
-                .unwrap_or_else(|| format!("section_{}", index + 1));
-            sections.push(json!({
-                "section_id": format!("{document_id}:{key}"),
-                "post_id": part["post_id"], "author": part["author"],
-                "published_at": part["published_at"], "license": license,
-                "heading": part["heading"], "text": part["text"],
-                "code_blocks": part["code"].as_array().cloned().unwrap_or_default(),
-                "source_url": row.canonical_url,
-            }));
+/// Posts, links and pages of a batch of documents, loaded with one query each.
+#[derive(Default)]
+struct DocumentParts {
+    posts: Vec<ExportPost>,
+    links: Vec<ExportLink>,
+    pages: Vec<ExportPage>,
+}
+
+struct Batch {
+    by_document: HashMap<i64, DocumentParts>,
+}
+
+impl Batch {
+    async fn load(tx: &mut Transaction<'_, Postgres>, ids: &[i64]) -> Result<Self, Error> {
+        let mut by_document = HashMap::<i64, DocumentParts>::new();
+        for post in sources::export_posts(tx, ids).await? {
+            by_document
+                .entry(post.document_id)
+                .or_default()
+                .posts
+                .push(post);
         }
+        for link in sources::export_links(tx, ids).await? {
+            by_document
+                .entry(link.document_id)
+                .or_default()
+                .links
+                .push(link);
+        }
+        for page in sources::export_pages(tx, ids).await? {
+            by_document
+                .entry(page.document_id)
+                .or_default()
+                .pages
+                .push(page);
+        }
+        Ok(Self { by_document })
     }
-    let links = row.metadata["links"]
-        .as_array()
+
+    fn take(&mut self, id: i64) -> DocumentParts {
+        self.by_document.remove(&id).unwrap_or_default()
+    }
+}
+
+fn timestamp(value: DateTime<Utc>) -> String {
+    value.to_rfc3339_opts(SecondsFormat::Secs, true)
+}
+
+fn canonical(row: ExportRow, parts: DocumentParts) -> ExportDocument {
+    let document_id = format!("{}:{}", row.source, row.native_id);
+    let internals = row.source == "internals";
+    let license_source = match row.source.as_str() {
+        "internals" => Source::Internals.license_source(),
+        _ => Source::Rfc.license_source(),
+    };
+    let license = json!({"source_url": license_source, "license_id": null, "status": "unresolved"});
+    // Section keys keep the v1 shape: Discourse "post_N", a single RFC "section_1".
+    let key = |post_number: i32| {
+        if internals {
+            format!("post_{post_number}")
+        } else {
+            format!("section_{post_number}")
+        }
+    };
+    let mut authors = BTreeSet::new();
+    let mut published_at = None;
+    let mut sections = Vec::new();
+    for post in parts.posts {
+        if let Some(author) = &post.author {
+            authors.insert(author.clone());
+        }
+        // Only the first post establishes a topic's publication time.
+        if post.post_number == 1 {
+            published_at = post.published_at;
+        }
+        sections.push(json!({
+            "section_id": format!("{document_id}:{}", key(post.post_number)),
+            "post_id": internals.then(|| key(post.post_number)),
+            "author": post.author,
+            "published_at": post.published_at.map(timestamp),
+            "license": license,
+            "heading": null,
+            "text": post.text,
+            "code_blocks": post.code,
+            "source_url": row.canonical_url,
+        }));
+    }
+    let links = parts
+        .links
         .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .map(|target| json!({"target_url": target, "section_id": null, "anchor_text": null}))
+        .map(|link| {
+            json!({
+                "target_url": link.target_url,
+                "section_id": format!("{document_id}:{}", key(link.post_number)),
+                "anchor_text": link.anchor_text,
+            })
+        })
         .collect();
-    let mut fetch_ids = BTreeSet::from([row.fetch_id]);
-    if let Some(pages) = row.metadata["pages"].as_object() {
-        fetch_ids.extend(pages.values().filter_map(|p| p["fetch_id"].as_i64()));
-    }
+    let fetch_ids: BTreeSet<i64> = parts.pages.iter().map(|page| page.fetch_id).collect();
+    let pages: Vec<Value> = parts
+        .pages
+        .iter()
+        .map(|page| json!({"page_no": page.page_no, "url": page.url, "fetch_id": page.fetch_id}))
+        .collect();
     ExportDocument {
         schema_version: 1,
         document_id,
@@ -256,7 +330,7 @@ fn canonical(row: ExportRow) -> ExportDocument {
         fetch_ids: fetch_ids.into_iter().collect(),
         parser_version: row.parser_version,
         license_provenance: license,
-        metadata: row.metadata,
+        metadata: json!({"license_source": license_source, "pages": pages}),
     }
 }
 
@@ -296,28 +370,68 @@ fn csv_record(doc: &ExportDocument, safe: bool) -> Result<Vec<u8>, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn post(number: i32, text: &str) -> ExportPost {
+        ExportPost {
+            document_id: 1,
+            post_number: number,
+            author: Some("author".into()),
+            published_at: Some(Utc::now()),
+            text: text.into(),
+            code: json!(["a\nb"]),
+        }
+    }
+
     #[test]
     fn canonical_and_csv_preserve_text_and_unknown_provenance() {
-        let now = chrono::Utc::now();
-        let doc = canonical(ExportRow {
-            source: "rfc".into(),
-            native_id: "1".into(),
-            canonical_url: "https://rust-lang.github.io/rfcs/0001-test.html".into(),
-            title: "=SUM(1,2)".into(),
-            body_text: "Привет, \"Rust\"\r\nsecond line\n第三行".into(),
-            content_hash: "hash".into(),
-            completeness: "unknown".into(),
-            completeness_reason: "fixture".into(),
-            metadata: json!({"sections": [{"text": "hello", "code": ["a\nb"]}], "links": ["https://example.org"], "pages": {"a": {"fetch_id": 7}}}),
-            parser_version: "fixture".into(),
-            fetch_id: 8,
-            fetched_at: now,
-            first_seen_at: now,
-            last_seen_at: now,
-        });
+        let now = Utc::now();
+        let doc = canonical(
+            ExportRow {
+                id: 1,
+                source: "rfc".into(),
+                native_id: "1".into(),
+                canonical_url: "https://rust-lang.github.io/rfcs/0001-test.html".into(),
+                title: "=SUM(1,2)".into(),
+                body_text: "Привет, \"Rust\"\r\nsecond line\n第三行".into(),
+                content_hash: "hash".into(),
+                completeness: "unknown".into(),
+                completeness_reason: "fixture".into(),
+                parser_version: "fixture".into(),
+                fetched_at: now,
+                first_seen_at: now,
+                last_seen_at: now,
+            },
+            DocumentParts {
+                posts: vec![post(1, "hello")],
+                links: vec![ExportLink {
+                    document_id: 1,
+                    post_number: 1,
+                    target_url: "https://example.org".into(),
+                    anchor_text: Some("example".into()),
+                }],
+                pages: vec![
+                    ExportPage {
+                        document_id: 1,
+                        page_no: 1,
+                        url: "https://rust-lang.github.io/rfcs/0001-test.html".into(),
+                        fetch_id: 8,
+                    },
+                    ExportPage {
+                        document_id: 1,
+                        page_no: 2,
+                        url: "https://rust-lang.github.io/rfcs/0001-test.html?page=2".into(),
+                        fetch_id: 7,
+                    },
+                ],
+            },
+        );
         assert_eq!(doc.document_id, "rfc:1");
         assert_eq!(doc.fetch_ids, vec![7, 8]);
-        assert!(doc.published_at.is_none());
+        assert_eq!(doc.sections[0]["section_id"], "rfc:1:section_1");
+        assert_eq!(doc.sections[0]["post_id"], Value::Null);
+        assert_eq!(doc.links[0]["section_id"], "rfc:1:section_1");
+        assert_eq!(doc.links[0]["anchor_text"], "example");
+        assert!(doc.published_at.is_some());
         assert!(doc.language.is_none());
         let serialized = serde_json::to_vec(&doc).unwrap();
         assert_eq!(

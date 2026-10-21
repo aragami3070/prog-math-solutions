@@ -9,5 +9,7 @@ pub enum Error {
     #[error("invalid crawl request: {0}")]
     Invalid(String),
     #[error(transparent)]
+    Sources(#[from] crate::use_cases::sources::errors::Error),
+    #[error(transparent)]
     Repository(#[from] crate::repository::errors::Error),
 }

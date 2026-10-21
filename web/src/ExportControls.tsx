@@ -20,6 +20,6 @@ export function ExportControls() {
     <div className="export-options">
       {formats.map(format => <a className="text-link" href={exportUrl(format, source, completeOnly, safe)} target="_blank" rel="noopener noreferrer" key={format}>Скачать {format === "zip" ? "ZIP + manifest" : format.toUpperCase()} ↓</a>)}
     </div>
-    <p className="footnote">ZIP содержит все три формата и manifest с количеством документов и SHA-256 файлов. Полнота тем Internals пока не подтверждена: фильтр полных документов исключает их. Подготовка файла может занять время; браузер начнёт скачивание, когда он будет готов. Ошибка API откроется в новой вкладке.</p>
+    <p className="footnote">ZIP содержит все три формата и manifest с количеством документов и SHA-256 файлов. Тема считается полной, если скачаны все её страницы подряд; фильтр полных документов исключает остальные. Подготовка файла может занять время; браузер начнёт скачивание, когда он будет готов. Ошибка API откроется в новой вкладке.</p>
   </section>;
 }

@@ -12,8 +12,8 @@ pub async fn execute(
     source: Source,
     page: CollectedPage,
 ) -> Result<(), Error> {
-    if let Some(doc) = page.document {
-        save_document::execute(tx, run_id, source, page.fetch_id, doc).await?;
+    if let Some(parsed) = page.parsed {
+        save_document::execute(tx, run_id, source, page.fetch_id, &parsed).await?;
     } else {
         crawls::succeeded(tx, run_id).await?;
     }

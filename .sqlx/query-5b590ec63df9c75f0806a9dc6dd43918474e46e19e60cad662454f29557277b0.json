@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE documents AS d\n        SET\n            body_text = agg.body,\n            content_hash = encode(sha256(convert_to(agg.body, 'UTF8')), 'hex'),\n            completeness = $2,\n            completeness_reason = $3\n        FROM (\n            SELECT COALESCE(string_agg(text, E'\\n\\n' ORDER BY post_number), '') AS body\n            FROM posts\n            WHERE document_id = $1\n        ) AS agg\n        WHERE d.id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5b590ec63df9c75f0806a9dc6dd43918474e46e19e60cad662454f29557277b0"
+}

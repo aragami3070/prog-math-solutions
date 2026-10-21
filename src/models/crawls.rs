@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::sources::{ParsedDocument, Source};
+use super::sources::{ParsedPage, Source};
 
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
@@ -49,6 +49,6 @@ pub struct QueuedPage {
 pub struct CollectedPage {
     pub id: i64,
     pub fetch_id: i64,
-    pub document: Option<ParsedDocument>,
+    pub parsed: Option<ParsedPage>,
     pub links: Vec<String>,
 }

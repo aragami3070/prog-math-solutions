@@ -29,7 +29,7 @@ function ErrorPanel({ error, retry }: { error: Error; retry: () => void }) {
 }
 function Loading() { return <div className="notice" role="status">Загружаем данные корпуса…</div>; }
 function Badge({ value }: { value: string }) {
-  const labels: Record<string, string> = { complete: "Полный документ", partial: "Часть темы", unknown: "Полнота не проверена", running: "В процессе", completed: "Завершён", failed: "С ошибками", blocked: "Источник остановлен", interrupted: "Прерван" };
+  const labels: Record<string, string> = { complete: "Полный документ", partial: "Часть темы (не все страницы)", unknown: "Полнота неизвестна", running: "В процессе", completed: "Завершён", failed: "С ошибками", blocked: "Источник остановлен", interrupted: "Прерван" };
   return <span className={`badge badge-${value}`}>{labels[value] ?? value}</span>;
 }
 
@@ -61,7 +61,7 @@ function Stats() {
       <div className="metrics"><Metric label="Уникальных документов" value={data.total_documents} accent /><Metric label="HTTP-запросов к страницам" value={data.document_requests} /><Metric label="HTTP / сетевых ошибок" value={data.http_errors} /></div>
       <div className="section-heading"><h2>Источники</h2><span>02 источника</span></div>
       <div className="source-grid">{data.sources.map(source => <section className="source-card" key={source.source}><div className="source-card-heading"><h3>{sourceName(source.source)}</h3><span className={source.paused ? "state paused" : "state"}>{source.paused ? "Приостановлен" : "Не приостановлен"}</span></div><strong className="source-total">{number(source.documents)} <small>документов</small></strong><dl><div><dt>Полных документов</dt><dd>{number(source.complete)}</dd></div><div><dt>Частичных / непроверенных</dt><dd>{number(source.partial)} / {number(source.unknown)}</dd></div><div><dt>Символов текста</dt><dd>{number(source.text_chars)}</dd></div><div><dt>Последний сбор</dt><dd>{date(source.last_collected_at)}</dd></div></dl>{source.pause_reason && <p className="error-text">{source.pause_reason}</p>}</section>)}</div>
-      <p className="footnote">Число документов не равно числу HTTP-запросов. Повторный сбор обновляет документ, а полнота тем Internals пока требует проверки.</p>
+      <p className="footnote">Число документов не равно числу HTTP-запросов. Повторный сбор обновляет документ, а «полный документ» означает, что скачаны все страницы темы подряд (на момент сбора).</p>
       <div className="section-heading"><h2>Последние запуски</h2><span>Последние 10</span></div>
       {data.recent_runs.length === 0 ? <div className="notice">Сбор ещё не запускался. Сервер сам не обращается к источникам.</div> : <div className="table-wrap"><table><thead><tr><th>Запуск / источник</th><th>Состояние</th><th>Обработано / найдено страниц</th><th>Ошибки</th><th>Начало</th></tr></thead><tbody>{data.recent_runs.map(run => <tr key={run.id}><td><strong>#{run.id} · {sourceName(run.source)}</strong>{run.error && <details><summary>Причина / подробности</summary><p>{run.error}</p></details>}</td><td><Badge value={run.status} /></td><td>{run.succeeded} / {run.requested}</td><td>{run.failed}</td><td>{date(run.started_at)}</td></tr>)}</tbody></table></div>}
     </>}
