@@ -5,10 +5,16 @@ use scraper::{Html, Selector};
 use std::collections::HashMap;
 use url::Url;
 
-pub fn seed(source: Source) -> &'static str {
+/// Where a new crawl starts. The RFC book's index page links to no RFC: its table of
+/// contents is added by JavaScript, with `toc.html` only inside `<noscript>`. So the
+/// table of contents is a seed of its own.
+pub fn seeds(source: Source) -> &'static [&'static str] {
     match source {
-        Source::Rfc => "https://rust-lang.github.io/rfcs/",
-        Source::Internals => "https://internals.rust-lang.org/",
+        Source::Rfc => &[
+            "https://rust-lang.github.io/rfcs/",
+            "https://rust-lang.github.io/rfcs/toc.html",
+        ],
+        Source::Internals => &["https://internals.rust-lang.org/"],
     }
 }
 
@@ -216,7 +222,7 @@ mod tests {
     fn discovers_navigation_and_deduplicates_topics() {
         let urls = links(
             Source::Internals,
-            &Url::parse(seed(Source::Internals)).unwrap(),
+            &Url::parse(seeds(Source::Internals)[0]).unwrap(),
             r#"
             <a href='/t/one/42#post_1'>a</a><a href='/t/42'>b</a>
             <a href='/t/one/42/8'>post</a><link rel='next' href='/t/one/42?page=2'>
@@ -252,7 +258,7 @@ mod tests {
     fn later_sighting_with_a_slug_replaces_a_bare_link() {
         let urls = links(
             Source::Internals,
-            &Url::parse(seed(Source::Internals)).unwrap(),
+            &Url::parse(seeds(Source::Internals)[0]).unwrap(),
             "<a href='/t/42'>bare</a><a href='/t/the-slug/42'>slug</a>",
         );
         assert_eq!(urls.len(), 1);
@@ -291,10 +297,20 @@ mod tests {
     }
 
     #[test]
+    fn every_seed_is_inside_its_source_scope() {
+        for source in [Source::Rfc, Source::Internals] {
+            for seed in seeds(source) {
+                assert!(normalize(source, seed).is_ok(), "{seed}");
+            }
+        }
+        assert!(seeds(Source::Rfc).contains(&"https://rust-lang.github.io/rfcs/toc.html"));
+    }
+
+    #[test]
     fn rfc_scope_includes_toc_iframe_but_not_other_books() {
         let urls = links(
             Source::Rfc,
-            &Url::parse(seed(Source::Rfc)).unwrap(),
+            &Url::parse(seeds(Source::Rfc)[0]).unwrap(),
             r#"
             <iframe src='toc.html'></iframe><a href='3058-try-trait-v2.html#x'>RFC</a>
             <a href='print.html'>print</a><a href='/book/'>book</a>

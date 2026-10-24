@@ -34,7 +34,10 @@ pub async fn execute(
         crawls::reset_failed_pages(tx, run.id).await?;
         return Ok(crawls::restart(tx, run.id).await?);
     }
-    let seeds = vec![QueueLink::same(discovery::seed(plan.source))];
+    let seeds: Vec<_> = discovery::seeds(plan.source)
+        .iter()
+        .map(|seed| QueueLink::same(*seed))
+        .collect();
     let mut run = crawls::insert(tx, plan.source, 0).await?;
     crawls::enqueue(tx, run.id, &seeds).await?;
     run.requested = seeds.len() as i32;

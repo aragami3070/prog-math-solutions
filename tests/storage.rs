@@ -331,7 +331,9 @@ async fn caller_controls_commit_and_rollback(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 #[ignore = "requires a PostgreSQL test role with CREATEDB; see README"]
 async fn crawl_frontier_checkpoints_deduplicates_and_resumes(pool: PgPool) {
-    let (run, guard) = start_run(&pool, Source::Rfc).await.unwrap();
+    const TOPIC: &str = "https://internals.rust-lang.org/t/42";
+    const TOPIC_HTML: &str = include_str!("fixtures/internals.html");
+    let (run, guard) = start_run(&pool, Source::Internals).await.unwrap();
     let mut tx = pool.begin().await.unwrap();
     let seed = crawls::next_page::execute(&mut tx, run.id)
         .await
@@ -343,11 +345,11 @@ async fn crawl_frontier_checkpoints_deduplicates_and_resumes(pool: PgPool) {
         parsed: None,
         links: vec![
             QueueLink::same(seed.url.clone()),
-            QueueLink::same(URL),
-            QueueLink::same(URL),
+            QueueLink::same(TOPIC),
+            QueueLink::same(TOPIC),
         ],
     };
-    crawls::complete_page::execute(&mut tx, run.id, Source::Rfc, page())
+    crawls::complete_page::execute(&mut tx, run.id, Source::Internals, page())
         .await
         .unwrap();
     tx.rollback().await.unwrap();
@@ -368,7 +370,7 @@ async fn crawl_frontier_checkpoints_deduplicates_and_resumes(pool: PgPool) {
             .id,
         seed.id
     );
-    crawls::complete_page::execute(&mut tx, run.id, Source::Rfc, page())
+    crawls::complete_page::execute(&mut tx, run.id, Source::Internals, page())
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -386,17 +388,17 @@ async fn crawl_frontier_checkpoints_deduplicates_and_resumes(pool: PgPool) {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(doc_page.url, URL);
+    assert_eq!(doc_page.url, TOPIC);
     crawls::fail_page::execute(&mut tx, run.id, doc_page.id, "fixture timeout", &[])
         .await
         .unwrap();
-    crawls::finish::execute(&mut tx, run.id, Source::Rfc, RunStatus::Failed, None)
+    crawls::finish::execute(&mut tx, run.id, Source::Internals, RunStatus::Failed, None)
         .await
         .unwrap();
     tx.commit().await.unwrap();
     guard.close().await.unwrap();
 
-    let (resumed, guard) = start_run(&pool, Source::Rfc).await.unwrap();
+    let (resumed, guard) = start_run(&pool, Source::Internals).await.unwrap();
     assert_eq!(resumed.id, run.id);
     assert_eq!(
         (resumed.requested, resumed.succeeded, resumed.failed),
@@ -415,11 +417,11 @@ async fn crawl_frontier_checkpoints_deduplicates_and_resumes(pool: PgPool) {
         &mut tx,
         FetchRecord {
             run_id: run.id,
-            url: URL,
+            url: TOPIC,
             kind: FetchKind::Document,
             status: Some(200),
             content_type: Some("text/html"),
-            body: Some(HTML),
+            body: Some(TOPIC_HTML),
             error: None,
         },
     )
@@ -428,12 +430,12 @@ async fn crawl_frontier_checkpoints_deduplicates_and_resumes(pool: PgPool) {
     crawls::complete_page::execute(
         &mut tx,
         run.id,
-        Source::Rfc,
+        Source::Internals,
         CollectedPage {
             id: doc_page.id,
             fetch_id,
-            parsed: Some(parse(Source::Rfc, URL, HTML).unwrap()),
-            links: vec![QueueLink::same(seed.url), QueueLink::same(URL)],
+            parsed: Some(parse(Source::Internals, TOPIC, TOPIC_HTML).unwrap()),
+            links: vec![QueueLink::same(seed.url), QueueLink::same(TOPIC)],
         },
     )
     .await
@@ -444,7 +446,7 @@ async fn crawl_frontier_checkpoints_deduplicates_and_resumes(pool: PgPool) {
             .unwrap()
             .is_none()
     );
-    crawls::finish::execute(&mut tx, run.id, Source::Rfc, RunStatus::Completed, None)
+    crawls::finish::execute(&mut tx, run.id, Source::Internals, RunStatus::Completed, None)
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -458,7 +460,7 @@ async fn crawl_frontier_checkpoints_deduplicates_and_resumes(pool: PgPool) {
         ),
         (2, 2)
     );
-    let (fresh, guard) = start_run(&pool, Source::Rfc).await.unwrap();
+    let (fresh, guard) = start_run(&pool, Source::Internals).await.unwrap();
     assert_ne!(fresh.id, run.id);
     guard.close().await.unwrap();
 }
@@ -516,5 +518,33 @@ async fn queue_requests_the_slug_url_but_deduplicates_by_identity(pool: PgPool) 
     assert_eq!(rows[0].fetch_url, slugged);
     // Both sightings count once: the seed and the topic.
     assert_eq!(stats(&pool).await.recent_runs[0].requested, 2);
+    guard.close().await.unwrap();
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[ignore = "requires a PostgreSQL test role with CREATEDB; see README"]
+async fn an_rfc_crawl_starts_from_the_index_and_the_table_of_contents(pool: PgPool) {
+    let (run, guard) = start_run(&pool, Source::Rfc).await.unwrap();
+    assert_eq!(run.requested, 2);
+    let mut tx = pool.begin().await.unwrap();
+    let mut urls = Vec::new();
+    for _ in 0..2 {
+        let page = crawls::next_page::execute(&mut tx, run.id)
+            .await
+            .unwrap()
+            .unwrap();
+        urls.push(page.url.clone());
+        crawls::fail_page::execute(&mut tx, run.id, page.id, "fixture", &[])
+            .await
+            .unwrap();
+    }
+    assert_eq!(
+        urls,
+        [
+            "https://rust-lang.github.io/rfcs/",
+            "https://rust-lang.github.io/rfcs/toc.html"
+        ]
+    );
+    tx.rollback().await.unwrap();
     guard.close().await.unwrap();
 }
