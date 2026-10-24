@@ -2,6 +2,7 @@ pub mod discovery;
 pub mod errors;
 mod http;
 mod persistence;
+mod retry;
 pub mod sources;
 
 use crate::models::{
@@ -120,6 +121,7 @@ async fn collect(
     )?;
     transport.load_robots().await?;
     let mut had_errors = false;
+    let mut streak = retry::UnreachableStreak::new();
     while let Some(page) = persistence.next_page().await? {
         let mut discovered = Vec::new();
         let outcome: Result<()> = async {
@@ -169,11 +171,19 @@ async fn collect(
             Ok(())
         }
         .await;
+        let stop = streak.record(outcome.as_ref().err());
         if let Err(error) = outcome {
             had_errors = true;
             persistence
                 .fail_page(page.id, &error.to_string(), &discovered)
                 .await?;
+            // The rest of the queue stays pending, so a later start continues from here.
+            if stop {
+                return Err(error.context(format!(
+                    "stopped after {} pages in a row could not be fetched",
+                    retry::MAX_UNREACHABLE_STREAK
+                )));
+            }
             if error.downcast_ref::<Blocked>().is_some()
                 || error.chain().any(|cause| cause.is::<sqlx::Error>())
             {

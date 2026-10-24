@@ -7,7 +7,11 @@ use sqlx::{Postgres, pool::PoolConnection};
 use url::Url;
 
 use super::discovery::normalize;
-use super::{errors::Blocked, persistence::Persistence};
+use super::{
+    errors::{Blocked, Unavailable},
+    persistence::Persistence,
+    retry,
+};
 use crate::config::AGENT_PRODUCT;
 use crate::models::{
     crawls::{FetchKind, FetchRecord},
@@ -33,6 +37,32 @@ pub struct Transport<'a> {
     run_id: i64,
     delay: Duration,
     robots: String,
+}
+
+/// Why a result is worth retrying, if it is: the network failed or the server had a hiccup.
+fn transient(result: &Result<Response>) -> Option<String> {
+    match result {
+        Ok(response) if matches!(response.status, 502..=504) => {
+            Some(format!("HTTP {}", response.status))
+        }
+        Err(error) => error
+            .downcast_ref::<reqwest::Error>()
+            .filter(|e| e.is_timeout() || e.is_connect() || e.is_request() || e.is_body())
+            .map(describe),
+        _ => None,
+    }
+}
+
+/// The error and its causes, e.g. "error sending request: connection refused".
+fn describe(error: &reqwest::Error) -> String {
+    let mut text = error.to_string();
+    let mut source = std::error::Error::source(error);
+    while let Some(cause) = source {
+        text.push_str(": ");
+        text.push_str(&cause.to_string());
+        source = cause.source();
+    }
+    text
 }
 
 pub fn allowed(robots: &str, url: &str) -> bool {
@@ -67,7 +97,7 @@ impl<'a> Transport<'a> {
 
     pub async fn load_robots(&mut self) -> Result<()> {
         let response = self
-            .request(
+            .request_retrying(
                 Url::parse(&format!("{}/robots.txt", self.source.origin()))?,
                 FetchKind::Robots,
             )
@@ -117,7 +147,9 @@ impl<'a> Transport<'a> {
                 allowed(&self.robots, current.as_str()),
                 "robots disallows document URL"
             );
-            let response = self.request(current.clone(), FetchKind::Document).await?;
+            let response = self
+                .request_retrying(current.clone(), FetchKind::Document)
+                .await?;
             if (300..400).contains(&response.status) {
                 let location = response
                     .location
@@ -146,6 +178,24 @@ impl<'a> Transport<'a> {
 
     pub fn allowed(&self, url: &Url) -> bool {
         allowed(&self.robots, url.as_str())
+    }
+
+    /// Retries connection failures, timeouts and 502/503/504 with growing waits. A refusal
+    /// (403/429, challenge) is never retried; it stops the source as before.
+    async fn request_retrying(&mut self, url: Url, kind: FetchKind) -> Result<Response> {
+        let mut attempt = 1;
+        loop {
+            let result = self.request(url.clone(), kind).await;
+            match retry::step(transient(&result), attempt, self.delay) {
+                retry::Step::Done => return result,
+                retry::Step::Wait(wait) => {
+                    tracing::warn!(attempt, ?wait, %url, "transient failure, retrying");
+                    tokio::time::sleep(wait).await;
+                    attempt += 1;
+                }
+                retry::Step::GiveUp(reason) => return Err(Unavailable(reason).into()),
+            }
+        }
     }
 
     async fn request(&mut self, url: Url, kind: FetchKind) -> Result<Response> {
@@ -270,5 +320,36 @@ mod tests {
             "User-agent: RustKnowledgeCollector\nDisallow: /",
             "https://internals.rust-lang.org/t/name/6"
         ));
+    }
+
+    #[tokio::test]
+    async fn only_network_failures_and_gateway_errors_are_transient() {
+        // Nothing listens on port 1, so the connection is refused at once.
+        let error = reqwest::Client::new()
+            .get("http://127.0.0.1:1/")
+            .send()
+            .await
+            .unwrap_err();
+        let reason = transient(&Err(error.into())).expect("connection failure is transient");
+        assert!(reason.starts_with("error sending request"), "{reason}");
+
+        let response = |status| {
+            Ok(Response {
+                status,
+                body: String::new(),
+                url: Url::parse("https://internals.rust-lang.org/t/1").unwrap(),
+                fetch_id: 1,
+                content_type: "text/html".into(),
+                location: None,
+            })
+        };
+        for status in [502, 503, 504] {
+            assert_eq!(transient(&response(status)), Some(format!("HTTP {status}")));
+        }
+        for status in [200, 301, 404, 500] {
+            assert!(transient(&response(status)).is_none(), "{status}");
+        }
+        assert!(transient(&Err(Blocked("HTTP 429".into()).into())).is_none());
+        assert!(transient(&Err(anyhow::anyhow!("document is not HTML"))).is_none());
     }
 }
