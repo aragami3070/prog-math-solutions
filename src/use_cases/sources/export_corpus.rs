@@ -69,7 +69,8 @@ pub async fn execute(
         }
         outputs.push((format, file));
     }
-    let mut after = String::new();
+    // Keyset position: the last (source, native_id) written; empty strings sort before all.
+    let mut after = (String::new(), String::new());
     let mut count = 0u64;
     let mut corpus_hash = Sha256::new();
     let mut source_counts = BTreeMap::<String, u64>::new();
@@ -77,7 +78,7 @@ pub async fn execute(
     let mut parser_versions = BTreeSet::new();
     let mut referenced_fetches = BTreeSet::new();
     loop {
-        let batch = sources::export_batch(tx, query.source, query.complete_only, &after).await?;
+        let batch = sources::export_batch(tx, query.source, query.complete_only, (&after.0, &after.1)).await?;
         if batch.is_empty() {
             break;
         }
@@ -86,7 +87,7 @@ pub async fn execute(
         for row in batch {
             let id = row.id;
             let doc = canonical(row, parts.take(id));
-            after = doc.document_id.clone();
+            after = (doc.source.clone(), doc.native_id.clone());
             let bytes = serde_json::to_vec(&doc)?;
             corpus_hash.update(&bytes);
             corpus_hash.update(b"\n");

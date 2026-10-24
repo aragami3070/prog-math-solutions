@@ -23,7 +23,7 @@ pub async fn export_batch(
     tx: &mut Transaction<'_, Postgres>,
     source: Option<Source>,
     complete_only: bool,
-    after: &str,
+    after: (&str, &str),
 ) -> Result<Vec<ExportRow>, Error> {
     Ok(sqlx::query_as!(
         ExportRow,
@@ -40,13 +40,14 @@ pub async fn export_batch(
         FROM documents AS d
         WHERE ($1::TEXT IS NULL OR d.source = $1)
           AND (NOT $2 OR d.completeness = 'complete')
-          AND (d.source || ':' || d.native_id) COLLATE "C" > $3 COLLATE "C"
-        ORDER BY (d.source || ':' || d.native_id) COLLATE "C"
+          AND (d.source COLLATE "C", d.native_id COLLATE "C") > ($3 COLLATE "C", $4 COLLATE "C")
+        ORDER BY d.source COLLATE "C", d.native_id COLLATE "C"
         LIMIT 32
         "#,
         source.map(Source::as_str),
         complete_only,
-        after,
+        after.0,
+        after.1,
     )
     .fetch_all(&mut **tx)
     .await?)

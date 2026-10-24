@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            d.id, d.source, d.native_id, d.canonical_url, d.title, d.body_text,\n            d.content_hash, d.completeness AS \"completeness: Completeness\",\n            d.completeness_reason, d.parser_version,\n            COALESCE(\n                (SELECT MAX(p.fetched_at) FROM document_pages AS p WHERE p.document_id = d.id),\n                d.last_seen_at\n            ) AS \"fetched_at!\",\n            d.first_seen_at, d.last_seen_at\n        FROM documents AS d\n        WHERE ($1::TEXT IS NULL OR d.source = $1)\n          AND (NOT $2 OR d.completeness = 'complete')\n          AND (d.source || ':' || d.native_id) COLLATE \"C\" > $3 COLLATE \"C\"\n        ORDER BY (d.source || ':' || d.native_id) COLLATE \"C\"\n        LIMIT 32\n        ",
+  "query": "\n        SELECT\n            d.id, d.source, d.native_id, d.canonical_url, d.title, d.body_text,\n            d.content_hash, d.completeness AS \"completeness: Completeness\",\n            d.completeness_reason, d.parser_version,\n            COALESCE(\n                (SELECT MAX(p.fetched_at) FROM document_pages AS p WHERE p.document_id = d.id),\n                d.last_seen_at\n            ) AS \"fetched_at!\",\n            d.first_seen_at, d.last_seen_at\n        FROM documents AS d\n        WHERE ($1::TEXT IS NULL OR d.source = $1)\n          AND (NOT $2 OR d.completeness = 'complete')\n          AND (d.source COLLATE \"C\", d.native_id COLLATE \"C\") > ($3 COLLATE \"C\", $4 COLLATE \"C\")\n        ORDER BY d.source COLLATE \"C\", d.native_id COLLATE \"C\"\n        LIMIT 32\n        ",
   "describe": {
     "columns": [
       {
@@ -73,6 +73,7 @@
       "Left": [
         "Text",
         "Bool",
+        "Text",
         "Text"
       ]
     },
@@ -92,5 +93,5 @@
       false
     ]
   },
-  "hash": "ecba00e88ada175974d431c5a7d59a8a963f0ca02601e5e7e73c9da7a58daaa1"
+  "hash": "a02141fec0ad424d05a835df60a27643a37c9812781c34eeff56444e90903db8"
 }
