@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE document_pages SET fetched_at = NOW() - INTERVAL '2 hours' WHERE url = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "da6c9bc832797c7564b2697c75fcd5009fc8eef98b50169f97b9f4c652f17680"
+}

@@ -3,6 +3,7 @@ pub mod complete_page;
 pub mod errors;
 pub mod fail_page;
 pub mod finish;
+pub mod fresh_page;
 pub mod next_page;
 pub mod record_failure;
 pub mod record_fetch;

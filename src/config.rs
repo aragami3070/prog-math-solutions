@@ -12,6 +12,8 @@ pub struct Config {
     pub web_dist: PathBuf,
     pub crawler_user_agent: Option<String>,
     pub crawl_delay: Duration,
+    /// A stored page younger than this is reused instead of requested again; zero disables reuse.
+    pub fresh_for: Duration,
 }
 
 impl Config {
@@ -24,6 +26,8 @@ impl Config {
             (5..=300).contains(&seconds),
             "crawl delay must be 5..300 seconds"
         );
+        let fresh_for =
+            parse_fresh_days(&env::var("CRAWL_FRESH_DAYS").unwrap_or_else(|_| "7".into()))?;
         let agent = optional("CRAWLER_USER_AGENT");
         if let Some(agent) = &agent {
             ensure!(
@@ -43,8 +47,15 @@ impl Config {
                 .into(),
             crawler_user_agent: agent,
             crawl_delay: Duration::from_secs(seconds),
+            fresh_for,
         })
     }
+}
+
+fn parse_fresh_days(value: &str) -> Result<Duration> {
+    let days: u64 = value.parse().context("invalid CRAWL_FRESH_DAYS")?;
+    ensure!(days <= 365, "CRAWL_FRESH_DAYS must be 0..365");
+    Ok(Duration::from_secs(days * 24 * 60 * 60))
 }
 
 fn parse_bind(value: &str) -> Result<SocketAddr> {
@@ -62,7 +73,8 @@ fn optional(key: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_bind;
+    use super::{parse_bind, parse_fresh_days};
+    use std::time::Duration;
 
     #[test]
     fn local_api_only_accepts_loopback_bind_addresses() {
@@ -71,6 +83,18 @@ mod tests {
         }
         for value in ["0.0.0.0:8080", "[::]:8080", "192.168.1.2:8080", "invalid"] {
             assert!(parse_bind(value).is_err(), "{value}");
+        }
+    }
+
+    #[test]
+    fn page_reuse_window_is_bounded_and_can_be_disabled() {
+        assert_eq!(parse_fresh_days("0").unwrap(), Duration::ZERO);
+        assert_eq!(
+            parse_fresh_days("7").unwrap(),
+            Duration::from_secs(7 * 86_400)
+        );
+        for value in ["366", "-1", "1.5", "week", ""] {
+            assert!(parse_fresh_days(value).is_err(), "{value:?}");
         }
     }
 }

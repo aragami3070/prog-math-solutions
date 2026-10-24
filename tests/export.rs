@@ -31,6 +31,7 @@ fn state(pool: PgPool) -> (AppState, Config) {
         web_dist: "web/dist".into(),
         crawler_user_agent: None,
         crawl_delay: Duration::from_secs(5),
+        fresh_for: Duration::from_secs(3600),
     };
     (AppState::new(pool, &config), config)
 }

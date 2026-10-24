@@ -12,6 +12,7 @@ fn app() -> Router {
         web_dist: "web/dist".into(),
         crawler_user_agent: None,
         crawl_delay: std::time::Duration::from_secs(5),
+        fresh_for: std::time::Duration::from_secs(3600),
     };
     router(AppState::new(pool, &config), &config.web_dist)
 }

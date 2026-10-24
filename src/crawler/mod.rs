@@ -4,7 +4,10 @@ mod http;
 mod persistence;
 pub mod sources;
 
-use crate::models::crawls::{CollectedPage, CrawlPlan, RunStatus};
+use crate::models::{
+    crawls::{CollectedPage, CrawlPlan, QueueLink, RunStatus},
+    sources::Source,
+};
 use anyhow::Result;
 use errors::Blocked;
 use http::Transport;
@@ -14,31 +17,48 @@ use std::{sync::Arc, time::Duration};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use url::Url;
 
+pub struct Settings {
+    pub user_agent: Arc<str>,
+    pub delay: Duration,
+    pub fresh_for: Duration,
+}
+
 #[derive(Clone)]
 pub struct Crawler {
     pool: PgPool,
     user_agent: Option<Arc<str>>,
     delay: Duration,
+    fresh_for: Duration,
     tasks: TaskTracker,
     stop: CancellationToken,
 }
 
 impl Crawler {
-    pub fn new(pool: PgPool, user_agent: Option<String>, delay: Duration) -> Self {
+    pub fn new(
+        pool: PgPool,
+        user_agent: Option<String>,
+        delay: Duration,
+        fresh_for: Duration,
+    ) -> Self {
         Self {
             pool,
             user_agent: user_agent.map(Into::into),
             delay,
+            fresh_for,
             tasks: TaskTracker::new(),
             stop: CancellationToken::new(),
         }
     }
 
-    pub fn settings(&self) -> Option<(Arc<str>, Duration)> {
+    pub fn settings(&self) -> Option<Settings> {
         if self.stop.is_cancelled() {
             return None;
         }
-        self.user_agent.clone().map(|agent| (agent, self.delay))
+        Some(Settings {
+            user_agent: self.user_agent.clone()?,
+            delay: self.delay,
+            fresh_for: self.fresh_for,
+        })
     }
 
     // The router calls this only after committing the run transaction.
@@ -103,12 +123,28 @@ async fn collect(
     while let Some(page) = persistence.next_page().await? {
         let mut discovered = Vec::new();
         let outcome: Result<()> = async {
+            // A recently stored page is not requested again, but its links still lead the crawl on.
+            let identity = discovery::normalize(plan.source, &page.url)?;
+            if discovery::is_document(plan.source, &identity)
+                && let Some(stored) = persistence
+                    .fresh_page(identity.as_str(), plan.fresh_for)
+                    .await?
+            {
+                discovered = discover(&transport, plan.source, &identity, &stored.body);
+                persistence
+                    .complete_page(CollectedPage {
+                        id: page.id,
+                        fetch_id: stored.fetch_id,
+                        parsed: None,
+                        links: discovered.clone(),
+                    })
+                    .await?;
+                tracing::debug!(url = %identity, "reused stored page");
+                return Ok(());
+            }
             let url = discovery::fetch_url(plan.source, &page.fetch_url)?;
             let response = transport.document(url).await?;
-            discovered = discovery::links(plan.source, &response.url, &response.body)
-                .into_iter()
-                .filter(|link| Url::parse(&link.fetch_url).is_ok_and(|url| transport.allowed(&url)))
-                .collect();
+            discovered = discover(&transport, plan.source, &response.url, &response.body);
             let parsed = if discovery::is_document(plan.source, &response.url) {
                 Some(sources::parse(
                     plan.source,
@@ -146,4 +182,12 @@ async fn collect(
         }
     }
     Ok(had_errors)
+}
+
+/// Supported links of a page that robots.txt lets the crawler request.
+fn discover(transport: &Transport<'_>, source: Source, base: &Url, html: &str) -> Vec<QueueLink> {
+    discovery::links(source, base, html)
+        .into_iter()
+        .filter(|link| Url::parse(&link.fetch_url).is_ok_and(|url| transport.allowed(&url)))
+        .collect()
 }

@@ -78,6 +78,13 @@ pub struct CrawlPlan {
     pub source: Source,
     pub user_agent: Arc<str>,
     pub delay: Duration,
+    pub fresh_for: Duration,
+}
+
+/// A stored response that is recent enough to use instead of requesting the page again.
+pub struct StoredPage {
+    pub fetch_id: i64,
+    pub body: String,
 }
 
 /// A page waiting in the queue. `url` is its canonical identity; `fetch_url` is what is requested.

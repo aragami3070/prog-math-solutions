@@ -22,6 +22,7 @@ fn plan(source: Source) -> CrawlPlan {
         source,
         user_agent: "fixture-only".into(),
         delay: std::time::Duration::from_secs(5),
+        fresh_for: std::time::Duration::from_secs(3600),
     }
 }
 
@@ -202,6 +203,7 @@ async fn collection_lifecycle(pool: PgPool) {
         web_dist: "web/dist".into(),
         crawler_user_agent: None,
         crawl_delay: std::time::Duration::from_secs(5),
+        fresh_for: std::time::Duration::from_secs(3600),
     };
     let app = api::router(AppState::new(pool.clone(), &config), &config.web_dist);
     let response = app

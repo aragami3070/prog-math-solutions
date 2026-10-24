@@ -1,6 +1,6 @@
 use super::errors::Error;
 use crate::models::{
-    crawls::{CrawlRun, FetchRecord, QueueLink, QueuedPage, RunStatus},
+    crawls::{CrawlRun, FetchRecord, QueueLink, QueuedPage, RunStatus, StoredPage},
     sources::Source,
 };
 use sqlx::{Postgres, Transaction};
@@ -280,5 +280,35 @@ pub async fn restart(tx: &mut Transaction<'_, Postgres>, run_id: i64) -> Result<
         run_id,
     )
     .fetch_one(&mut **tx)
+    .await?)
+}
+
+/// The newest stored response of a document page that is recent enough and was parsed by
+/// the current parser, so the page can be processed without a request to the source.
+pub async fn fresh_page(
+    tx: &mut Transaction<'_, Postgres>,
+    url: &str,
+    max_age_secs: f64,
+    parser_version: &str,
+) -> Result<Option<StoredPage>, Error> {
+    Ok(sqlx::query_as!(
+        StoredPage,
+        r#"
+        SELECT f.id AS fetch_id, f.body AS "body!"
+        FROM document_pages AS p
+        JOIN documents AS d ON d.id = p.document_id
+        JOIN fetches AS f ON f.id = p.fetch_id
+        WHERE p.url = $1
+          AND d.parser_version = $2
+          AND f.body IS NOT NULL
+          AND p.fetched_at > NOW() - make_interval(secs => $3)
+        ORDER BY p.fetched_at DESC
+        LIMIT 1
+        "#,
+        url,
+        parser_version,
+        max_age_secs,
+    )
+    .fetch_optional(&mut **tx)
     .await?)
 }

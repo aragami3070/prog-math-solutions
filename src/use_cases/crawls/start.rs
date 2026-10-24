@@ -9,11 +9,12 @@ use sqlx::{Postgres, Transaction};
 // No database or network work: invalid input/disabled collection is rejected
 // before the router checks a connection out of the pool.
 pub fn prepare(crawler: &Crawler, request: CrawlRequest) -> Result<CrawlPlan, Error> {
-    let (user_agent, delay) = crawler.settings().ok_or(Error::Disabled)?;
+    let settings = crawler.settings().ok_or(Error::Disabled)?;
     Ok(CrawlPlan {
         source: request.source,
-        user_agent,
-        delay,
+        user_agent: settings.user_agent,
+        delay: settings.delay,
+        fresh_for: settings.fresh_for,
     })
 }
 
@@ -51,7 +52,12 @@ mod tests {
         let pool = sqlx::postgres::PgPoolOptions::new()
             .connect_lazy("postgres://unused:unused@localhost/unused")
             .unwrap();
-        let crawler = Crawler::new(pool, Some("fixture-agent".into()), Duration::from_secs(5));
+        let crawler = Crawler::new(
+            pool,
+            Some("fixture-agent".into()),
+            Duration::from_secs(5),
+            Duration::from_secs(3600),
+        );
         let plan = prepare(
             &crawler,
             CrawlRequest {

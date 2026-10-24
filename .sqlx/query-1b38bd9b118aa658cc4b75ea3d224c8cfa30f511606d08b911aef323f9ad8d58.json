@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT f.id AS fetch_id, f.body AS \"body!\"\n        FROM document_pages AS p\n        JOIN documents AS d ON d.id = p.document_id\n        JOIN fetches AS f ON f.id = p.fetch_id\n        WHERE p.url = $1\n          AND d.parser_version = $2\n          AND f.body IS NOT NULL\n          AND p.fetched_at > NOW() - make_interval(secs => $3)\n        ORDER BY p.fetched_at DESC\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "fetch_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "body!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "1b38bd9b118aa658cc4b75ea3d224c8cfa30f511606d08b911aef323f9ad8d58"
+}

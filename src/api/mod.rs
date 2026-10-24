@@ -40,6 +40,7 @@ impl AppState {
                 pool.clone(),
                 config.crawler_user_agent.clone(),
                 config.crawl_delay,
+                config.fresh_for,
             ),
             pool,
             export_slots: Arc::new(Semaphore::new(1)),

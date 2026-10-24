@@ -1,11 +1,12 @@
 use crate::{
     models::{
-        crawls::{CollectedPage, FetchRecord, QueueLink, QueuedPage, RunStatus},
+        crawls::{CollectedPage, FetchRecord, QueueLink, QueuedPage, RunStatus, StoredPage},
         sources::Source,
     },
     use_cases::crawls,
 };
 use sqlx::{Connection, PgPool, Postgres, pool::PoolConnection};
+use std::time::Duration;
 
 pub struct Persistence {
     pool: PgPool,
@@ -34,6 +35,17 @@ impl Persistence {
         let id = crawls::record_fetch::execute(&mut tx, fetch).await?;
         tx.commit().await?;
         Ok(id)
+    }
+
+    pub async fn fresh_page(
+        &self,
+        url: &str,
+        fresh_for: Duration,
+    ) -> anyhow::Result<Option<StoredPage>> {
+        let mut tx = self.pool.begin().await?;
+        let page = crawls::fresh_page::execute(&mut tx, url, fresh_for).await?;
+        tx.commit().await?;
+        Ok(page)
     }
 
     pub async fn next_page(&self) -> anyhow::Result<Option<QueuedPage>> {

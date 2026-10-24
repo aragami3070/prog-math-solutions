@@ -1,5 +1,5 @@
 use rust_knowledge::{
-    crawler::sources::parse,
+    crawler::{discovery::normalize, sources::PARSER_VERSION, sources::parse},
     models::{
         crawls::{FetchKind, FetchRecord},
         sources::{Completeness, Source},
@@ -9,6 +9,7 @@ use rust_knowledge::{
 };
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
+use std::time::Duration;
 
 const TOPIC: &str = "https://internals.rust-lang.org/t/example/42";
 
@@ -183,4 +184,80 @@ async fn pages_accumulate_across_runs_and_completeness_follows_the_chain(pool: P
     save(&pool, second, 3, &[4, 5, 6], false).await;
     assert_eq!(count(&pool, "posts").await, 6);
     assert_eq!(doc(&pool).await.completeness, Completeness::Complete);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[ignore = "requires a PostgreSQL test role with CREATEDB; see README"]
+async fn fresh_pages_are_reused_only_while_recent_and_parsed_by_the_current_parser(pool: PgPool) {
+    let run = new_run(&pool).await;
+    save(&pool, run, 1, &[1, 2], true).await;
+    save(&pool, run, 2, &[3], false).await;
+    // The queue identity of a page must match the stored page URL, slug or not.
+    let key = |input: &str| normalize(Source::Internals, input).unwrap().to_string();
+    let second = key("https://internals.rust-lang.org/t/example/42?page=2");
+    let hour = Duration::from_secs(3600);
+    let lookup = |url: String, ttl: Duration| {
+        let pool = pool.clone();
+        async move {
+            let mut tx = pool.begin().await.unwrap();
+            let page = crawls::fresh_page::execute(&mut tx, &url, ttl)
+                .await
+                .unwrap();
+            tx.commit().await.unwrap();
+            page
+        }
+    };
+
+    let page = lookup(second.clone(), hour)
+        .await
+        .expect("recent page is reused");
+    assert!(page.body.contains("Post number 3 "));
+    let stored = sqlx::query_scalar!(
+        r#"SELECT fetch_id FROM document_pages WHERE url = $1"#,
+        second,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(page.fetch_id, stored);
+    assert!(lookup(key(&url(1)), hour).await.is_some());
+
+    assert!(
+        lookup(second.clone(), Duration::ZERO).await.is_none(),
+        "reuse disabled"
+    );
+    assert!(
+        lookup(key("https://internals.rust-lang.org/t/43"), hour)
+            .await
+            .is_none()
+    );
+
+    sqlx::query!(
+        r#"UPDATE document_pages SET fetched_at = NOW() - INTERVAL '2 hours' WHERE url = $1"#,
+        second,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        lookup(second.clone(), hour).await.is_none(),
+        "stale page is fetched again"
+    );
+    assert!(
+        lookup(second.clone(), Duration::from_secs(3 * 3600))
+            .await
+            .is_some()
+    );
+
+    sqlx::query!(r#"UPDATE documents SET parser_version = 'older-parser' WHERE native_id = '42'"#,)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        lookup(second, Duration::from_secs(3 * 3600))
+            .await
+            .is_none(),
+        "pages parsed by another parser version are fetched again"
+    );
+    assert_ne!(PARSER_VERSION, "older-parser");
 }

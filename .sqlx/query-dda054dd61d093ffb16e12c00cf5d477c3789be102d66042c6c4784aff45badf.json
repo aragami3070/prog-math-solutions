@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE documents SET parser_version = 'older-parser' WHERE native_id = '42'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "dda054dd61d093ffb16e12c00cf5d477c3789be102d66042c6c4784aff45badf"
+}
