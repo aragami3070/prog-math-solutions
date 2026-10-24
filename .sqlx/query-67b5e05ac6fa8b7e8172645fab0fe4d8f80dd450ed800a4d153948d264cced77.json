@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, source, status, requested, succeeded, failed,\n               started_at, finished_at, error\n        FROM crawl_runs AS r\n        WHERE source = $1 AND status IN ('failed', 'interrupted', 'blocked')\n          AND EXISTS (SELECT 1 FROM crawl_queue WHERE run_id = r.id AND status <> 'done')\n        ORDER BY id DESC LIMIT 1\n        ",
+  "query": "\n        UPDATE crawl_runs\n        SET status = 'running', finished_at = NULL, error = NULL, failed = 0\n        WHERE id = $1\n        RETURNING id, source, status AS \"status: RunStatus\", requested, succeeded, failed,\n                  started_at, finished_at, error\n        ",
   "describe": {
     "columns": [
       {
@@ -15,7 +15,7 @@
       },
       {
         "ordinal": 2,
-        "name": "status",
+        "name": "status: RunStatus",
         "type_info": "Text"
       },
       {
@@ -51,7 +51,7 @@
     ],
     "parameters": {
       "Left": [
-        "Text"
+        "Int8"
       ]
     },
     "nullable": [
@@ -66,5 +66,5 @@
       true
     ]
   },
-  "hash": "36a2448e71efcc665303cba67f364c7b7cc3caee094bba45a6089807dd8cec53"
+  "hash": "67b5e05ac6fa8b7e8172645fab0fe4d8f80dd450ed800a4d153948d264cced77"
 }
