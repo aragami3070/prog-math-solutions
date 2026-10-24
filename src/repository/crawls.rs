@@ -1,6 +1,6 @@
 use super::errors::Error;
 use crate::models::{
-    crawls::{CrawlRun, FetchRecord, QueuedPage},
+    crawls::{CrawlRun, FetchRecord, QueuedPage, RunStatus},
     sources::Source,
 };
 use sqlx::{Postgres, Transaction};
@@ -40,7 +40,7 @@ pub async fn insert(
         INSERT INTO crawl_runs (source, status, requested)
         VALUES ($1, 'running', $2)
         RETURNING
-            id, source, status, requested, succeeded, failed,
+            id, source, status AS "status: RunStatus", requested, succeeded, failed,
             started_at, finished_at, error
         "#,
         source.as_str(),
@@ -62,7 +62,7 @@ pub async fn record_fetch(
         "#,
         fetch.run_id,
         fetch.url,
-        fetch.kind,
+        fetch.kind.as_str(),
         fetch.status.map(i32::from),
         fetch.content_type,
         fetch.body,
@@ -108,7 +108,7 @@ pub async fn failed(
 pub async fn finish(
     tx: &mut Transaction<'_, Postgres>,
     run_id: i64,
-    status: &str,
+    status: RunStatus,
     error: Option<&str>,
 ) -> Result<(), Error> {
     sqlx::query!(
@@ -121,7 +121,7 @@ pub async fn finish(
         WHERE id = $1
         "#,
         run_id,
-        status,
+        status.as_str(),
         error,
     )
     .execute(&mut **tx)
@@ -134,7 +134,7 @@ pub async fn recent(tx: &mut Transaction<'_, Postgres>) -> Result<Vec<CrawlRun>,
         CrawlRun,
         r#"
         SELECT
-            id, source, status, requested, succeeded, failed,
+            id, source, status AS "status: RunStatus", requested, succeeded, failed,
             started_at, finished_at, error
         FROM crawl_runs
         ORDER BY id DESC
@@ -216,7 +216,7 @@ pub async fn resumable(
     Ok(sqlx::query_as!(
         CrawlRun,
         r#"
-        SELECT id, source, status, requested, succeeded, failed,
+        SELECT id, source, status AS "status: RunStatus", requested, succeeded, failed,
                started_at, finished_at, error
         FROM crawl_runs AS r
         WHERE source = $1 AND status IN ('failed', 'interrupted', 'blocked')
@@ -252,7 +252,7 @@ pub async fn restart(tx: &mut Transaction<'_, Postgres>, run_id: i64) -> Result<
         UPDATE crawl_runs
         SET status = 'running', finished_at = NULL, error = NULL, failed = 0
         WHERE id = $1
-        RETURNING id, source, status, requested, succeeded, failed,
+        RETURNING id, source, status AS "status: RunStatus", requested, succeeded, failed,
                   started_at, finished_at, error
         "#,
         run_id,

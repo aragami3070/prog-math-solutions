@@ -1,4 +1,4 @@
-use super::sources::Source;
+use super::sources::{Completeness, Source};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -51,7 +51,7 @@ pub struct ExportRow {
     pub title: String,
     pub body_text: String,
     pub content_hash: String,
-    pub completeness: String,
+    pub completeness: Completeness,
     pub completeness_reason: String,
     pub parser_version: String,
     pub fetched_at: DateTime<Utc>,
@@ -103,7 +103,7 @@ pub struct ExportDocument {
     pub body_text: String,
     pub links: Vec<Value>,
     pub content_hash: String,
-    pub completeness: String,
+    pub completeness: Completeness,
     pub completeness_reason: String,
     pub fetch_ids: Vec<i64>,
     pub parser_version: String,

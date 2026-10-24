@@ -24,12 +24,6 @@ impl Source {
         }
     }
 
-    pub fn from_url(url: &url::Url) -> Option<Self> {
-        [Self::Internals, Self::Rfc].into_iter().find(|source| {
-            url::Url::parse(source.origin()).is_ok_and(|origin| origin.origin() == url.origin())
-        })
-    }
-
     pub fn origin(self) -> &'static str {
         match self {
             Self::Internals => "https://internals.rust-lang.org",
@@ -47,7 +41,7 @@ pub struct DocumentSummary {
     pub title: String,
     pub excerpt: String,
     pub text_chars: i64,
-    pub completeness: String,
+    pub completeness: Completeness,
     pub completeness_reason: String,
     pub first_seen_at: DateTime<Utc>,
     pub last_seen_at: DateTime<Utc>,
@@ -62,7 +56,9 @@ pub struct DocumentPage {
     pub total_pages: i64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, sqlx::Type)]
+#[serde(rename_all = "lowercase")]
+#[sqlx(type_name = "text", rename_all = "lowercase")]
 pub enum Completeness {
     Complete,
     Partial,

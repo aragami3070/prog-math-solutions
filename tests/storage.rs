@@ -3,9 +3,9 @@ use rust_knowledge::{
     config::Config,
     crawler::sources::parse,
     models::{
-        crawls::{CollectedPage, CrawlPlan, CrawlRun, FetchRecord},
+        crawls::{CollectedPage, CrawlPlan, CrawlRun, FetchKind, FetchRecord, RunStatus},
         pagination::Pagination,
-        sources::Source,
+        sources::{Completeness, Source},
         statistics::Statistics,
     },
     use_cases::{crawls, sources, statistics},
@@ -84,7 +84,7 @@ async fn collection_lifecycle(pool: PgPool) {
         Err(crawls::errors::Error::Busy)
     ));
     recover(&pool).await;
-    assert_eq!(stats(&pool).await.recent_runs[0].status, "running");
+    assert_eq!(stats(&pool).await.recent_runs[0].status, RunStatus::Running);
     for _ in 0..2 {
         let mut tx = pool.begin().await.unwrap();
         let fetch_id = crawls::record_fetch::execute(
@@ -92,7 +92,7 @@ async fn collection_lifecycle(pool: PgPool) {
             FetchRecord {
                 run_id: run.id,
                 url: URL,
-                kind: "document",
+                kind: FetchKind::Document,
                 status: Some(200),
                 content_type: Some("text/html"),
                 body: Some(HTML),
@@ -113,7 +113,7 @@ async fn collection_lifecycle(pool: PgPool) {
         tx.commit().await.unwrap();
     }
     let mut tx = pool.begin().await.unwrap();
-    crawls::finish::execute(&mut tx, run.id, Source::Rfc, "completed", None)
+    crawls::finish::execute(&mut tx, run.id, Source::Rfc, RunStatus::Completed, None)
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -144,7 +144,7 @@ async fn collection_lifecycle(pool: PgPool) {
     tx.commit().await.unwrap();
     assert_eq!((page.total, page.total_pages, page.items.len()), (1, 1, 1));
     assert_eq!(page.items[0].native_id, "3058");
-    assert_eq!(page.items[0].completeness, "complete");
+    assert_eq!(page.items[0].completeness, Completeness::Complete);
     assert!(second.items.is_empty());
     assert_eq!(second.total, 1);
     let report = stats(&pool).await;
@@ -175,7 +175,7 @@ async fn collection_lifecycle(pool: PgPool) {
         &mut tx,
         blocked.id,
         Source::Internals,
-        "blocked",
+        RunStatus::Blocked,
         Some("fixture 429"),
     )
     .await
@@ -238,7 +238,7 @@ async fn collection_lifecycle(pool: PgPool) {
         FetchRecord {
             run_id: abandoned.id,
             url: "fixture",
-            kind: "document",
+            kind: FetchKind::Document,
             status: Some(200),
             content_type: None,
             body: None,
@@ -251,7 +251,7 @@ async fn collection_lifecycle(pool: PgPool) {
     guard.close().await.unwrap();
     recover(&pool).await;
     let report = stats(&pool).await;
-    assert_eq!(report.recent_runs[0].status, "interrupted");
+    assert_eq!(report.recent_runs[0].status, RunStatus::Interrupted);
     assert_eq!(report.http_errors, 1);
 }
 
@@ -265,7 +265,7 @@ async fn caller_controls_commit_and_rollback(pool: PgPool) {
         FetchRecord {
             run_id: run.id,
             url: URL,
-            kind: "document",
+            kind: FetchKind::Document,
             status: Some(200),
             content_type: Some("text/html"),
             body: Some(HTML),
@@ -287,7 +287,7 @@ async fn caller_controls_commit_and_rollback(pool: PgPool) {
         &mut tx,
         run.id,
         Source::Rfc,
-        "blocked",
+        RunStatus::Blocked,
         Some("fixture stop"),
     )
     .await
@@ -297,7 +297,7 @@ async fn caller_controls_commit_and_rollback(pool: PgPool) {
     let report = stats(&pool).await;
     assert_eq!((report.total_documents, report.document_requests), (0, 0));
     assert_eq!(report.recent_runs[0].succeeded, 0);
-    assert_eq!(report.recent_runs[0].status, "running");
+    assert_eq!(report.recent_runs[0].status, RunStatus::Running);
     assert!(report.sources.iter().all(|s| !s.paused));
 
     let mut tx = pool.begin().await.unwrap();
@@ -305,14 +305,14 @@ async fn caller_controls_commit_and_rollback(pool: PgPool) {
         &mut tx,
         run.id,
         Source::Rfc,
-        "blocked",
+        RunStatus::Blocked,
         Some("fixture stop"),
     )
     .await
     .unwrap();
     tx.commit().await.unwrap();
     let report = stats(&pool).await;
-    assert_eq!(report.recent_runs[0].status, "blocked");
+    assert_eq!(report.recent_runs[0].status, RunStatus::Blocked);
     assert!(
         report
             .sources
@@ -382,7 +382,7 @@ async fn crawl_frontier_checkpoints_deduplicates_and_resumes(pool: PgPool) {
     crawls::fail_page::execute(&mut tx, run.id, doc_page.id, "fixture timeout", &[])
         .await
         .unwrap();
-    crawls::finish::execute(&mut tx, run.id, Source::Rfc, "failed", None)
+    crawls::finish::execute(&mut tx, run.id, Source::Rfc, RunStatus::Failed, None)
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -408,7 +408,7 @@ async fn crawl_frontier_checkpoints_deduplicates_and_resumes(pool: PgPool) {
         FetchRecord {
             run_id: run.id,
             url: URL,
-            kind: "document",
+            kind: FetchKind::Document,
             status: Some(200),
             content_type: Some("text/html"),
             body: Some(HTML),
@@ -436,7 +436,7 @@ async fn crawl_frontier_checkpoints_deduplicates_and_resumes(pool: PgPool) {
             .unwrap()
             .is_none()
     );
-    crawls::finish::execute(&mut tx, run.id, Source::Rfc, "completed", None)
+    crawls::finish::execute(&mut tx, run.id, Source::Rfc, RunStatus::Completed, None)
         .await
         .unwrap();
     tx.commit().await.unwrap();

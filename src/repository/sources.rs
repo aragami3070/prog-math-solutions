@@ -30,7 +30,8 @@ pub async fn export_batch(
         r#"
         SELECT
             d.id, d.source, d.native_id, d.canonical_url, d.title, d.body_text,
-            d.content_hash, d.completeness, d.completeness_reason, d.parser_version,
+            d.content_hash, d.completeness AS "completeness: Completeness",
+            d.completeness_reason, d.parser_version,
             COALESCE(
                 (SELECT MAX(p.fetched_at) FROM document_pages AS p WHERE p.document_id = d.id),
                 d.last_seen_at
@@ -132,7 +133,7 @@ pub async fn documents(
             title,
             LEFT(body_text, 320) AS "excerpt!",
             CHAR_LENGTH(body_text)::BIGINT AS "text_chars!",
-            completeness,
+            completeness AS "completeness: Completeness",
             completeness_reason,
             first_seen_at,
             last_seen_at
@@ -395,41 +396,6 @@ pub async fn refresh_document(
     .execute(&mut **tx)
     .await?;
     Ok(())
-}
-
-pub struct StoredFetch {
-    pub url: String,
-    pub body: String,
-}
-
-pub async fn reparse_fetch_ids(tx: &mut Transaction<'_, Postgres>) -> Result<Vec<i64>, Error> {
-    Ok(sqlx::query_scalar!(
-        r#"
-        SELECT id
-        FROM fetches
-        WHERE kind = 'document' AND status = 200 AND body IS NOT NULL
-        ORDER BY id
-        "#,
-    )
-    .fetch_all(&mut **tx)
-    .await?)
-}
-
-pub async fn stored_fetch(
-    tx: &mut Transaction<'_, Postgres>,
-    fetch_id: i64,
-) -> Result<Option<StoredFetch>, Error> {
-    Ok(sqlx::query_as!(
-        StoredFetch,
-        r#"
-        SELECT url, body AS "body!"
-        FROM fetches
-        WHERE id = $1 AND body IS NOT NULL
-        "#,
-        fetch_id,
-    )
-    .fetch_optional(&mut **tx)
-    .await?)
 }
 
 pub async fn statistics(tx: &mut Transaction<'_, Postgres>) -> Result<Vec<SourceStats>, Error> {

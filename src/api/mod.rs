@@ -8,9 +8,9 @@ use crate::{
     config::Config,
     crawler::Crawler,
     models::{
-        crawls::{CrawlRequest, CrawlRun},
+        crawls::{CrawlRequest, CrawlRun, RunStatus},
         exports::ExportFormat,
-        sources::{DocumentPage, DocumentSummary, Source},
+        sources::{Completeness, DocumentPage, DocumentSummary, Source},
         statistics::{SourceStats, Statistics},
     },
 };
@@ -62,6 +62,8 @@ impl AppState {
         ExportFormat,
         CrawlRequest,
         CrawlRun,
+        RunStatus,
+        Completeness,
         DocumentSummary,
         DocumentPage,
         SourceStats,

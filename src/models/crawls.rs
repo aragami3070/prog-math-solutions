@@ -12,11 +12,50 @@ pub struct CrawlRequest {
     pub source: Source,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema, sqlx::Type)]
+#[serde(rename_all = "lowercase")]
+#[sqlx(type_name = "text", rename_all = "lowercase")]
+pub enum RunStatus {
+    Running,
+    Completed,
+    Failed,
+    Blocked,
+    Interrupted,
+}
+
+impl RunStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Running => "running",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+            Self::Blocked => "blocked",
+            Self::Interrupted => "interrupted",
+        }
+    }
+}
+
+/// What a recorded response was requested for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FetchKind {
+    Robots,
+    Document,
+}
+
+impl FetchKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Robots => "robots",
+            Self::Document => "document",
+        }
+    }
+}
+
 #[derive(Debug, Serialize, ToSchema)]
 pub struct CrawlRun {
     pub id: i64,
     pub source: String,
-    pub status: String,
+    pub status: RunStatus,
     pub requested: i32,
     pub succeeded: i32,
     pub failed: i32,
@@ -28,7 +67,7 @@ pub struct CrawlRun {
 pub struct FetchRecord<'a> {
     pub run_id: i64,
     pub url: &'a str,
-    pub kind: &'a str,
+    pub kind: FetchKind,
     pub status: Option<u16>,
     pub content_type: Option<&'a str>,
     pub body: Option<&'a str>,

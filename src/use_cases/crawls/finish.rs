@@ -1,6 +1,6 @@
 use super::errors::Error;
 use crate::{
-    models::sources::Source,
+    models::{crawls::RunStatus, sources::Source},
     repository::{crawls, sources},
 };
 use sqlx::{Postgres, Transaction};
@@ -10,10 +10,10 @@ pub async fn execute(
     tx: &mut Transaction<'_, Postgres>,
     run_id: i64,
     source: Source,
-    status: &str,
+    status: RunStatus,
     error: Option<&str>,
 ) -> Result<(), Error> {
-    if status == "blocked" {
+    if status == RunStatus::Blocked {
         sources::pause(tx, source, error.unwrap_or("source blocked")).await?;
     }
     crawls::finish(tx, run_id, status, error).await?;

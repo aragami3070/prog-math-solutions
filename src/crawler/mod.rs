@@ -4,7 +4,7 @@ mod http;
 mod persistence;
 pub mod sources;
 
-use crate::models::crawls::{CollectedPage, CrawlPlan};
+use crate::models::crawls::{CollectedPage, CrawlPlan, RunStatus};
 use anyhow::Result;
 use errors::Blocked;
 use http::Transport;
@@ -50,14 +50,21 @@ impl Crawler {
                 result = collect(&persistence, &mut guard, run_id, plan) => result,
             };
             let (status, error) = match result {
-                Ok(had_errors) => (if had_errors { "failed" } else { "completed" }, None),
+                Ok(had_errors) => (
+                    if had_errors {
+                        RunStatus::Failed
+                    } else {
+                        RunStatus::Completed
+                    },
+                    None,
+                ),
                 Err(error) => {
                     let status = if stop.is_cancelled() {
-                        "interrupted"
+                        RunStatus::Interrupted
                     } else if error.downcast_ref::<Blocked>().is_some() {
-                        "blocked"
+                        RunStatus::Blocked
                     } else {
-                        "failed"
+                        RunStatus::Failed
                     };
                     (status, Some(error.to_string()))
                 }

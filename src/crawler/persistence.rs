@@ -1,6 +1,6 @@
 use crate::{
     models::{
-        crawls::{CollectedPage, FetchRecord, QueuedPage},
+        crawls::{CollectedPage, FetchRecord, QueuedPage, RunStatus},
         sources::Source,
     },
     use_cases::crawls,
@@ -62,7 +62,7 @@ impl Persistence {
         Ok(())
     }
 
-    pub async fn finish(&self, status: &str, error: Option<&str>) -> anyhow::Result<()> {
+    pub async fn finish(&self, status: RunStatus, error: Option<&str>) -> anyhow::Result<()> {
         let mut tx = self.pool.begin().await?;
         crawls::finish::execute(&mut tx, self.run_id, self.source, status, error).await?;
         tx.commit().await?;

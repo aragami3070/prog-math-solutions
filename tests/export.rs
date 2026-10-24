@@ -8,7 +8,7 @@ use rust_knowledge::{
     config::Config,
     crawler::sources::parse,
     models::{
-        crawls::FetchRecord,
+        crawls::{FetchKind, FetchRecord},
         exports::{ExportDocument, ExportFormat, ExportQuery},
         sources::Source,
     },
@@ -55,7 +55,7 @@ async fn insert(pool: &PgPool, source: Source, id: usize) {
         FetchRecord {
             run_id: run.id,
             url: &url,
-            kind: "document",
+            kind: FetchKind::Document,
             status: Some(200),
             content_type: Some("text/html"),
             body: Some(html),

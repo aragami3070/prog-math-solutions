@@ -2,6 +2,9 @@ use std::{env, net::SocketAddr, path::PathBuf, time::Duration};
 
 use anyhow::{Context, Result, ensure};
 
+/// Product token of the crawler: the User-Agent prefix and the robots.txt group it obeys.
+pub const AGENT_PRODUCT: &str = "RustKnowledgeCollector";
+
 #[derive(Clone)]
 pub struct Config {
     pub database_url: String,
@@ -24,9 +27,11 @@ impl Config {
         let agent = optional("CRAWLER_USER_AGENT");
         if let Some(agent) = &agent {
             ensure!(
-                agent.starts_with("RustKnowledgeCollector/")
+                agent
+                    .strip_prefix(AGENT_PRODUCT)
+                    .is_some_and(|rest| rest.starts_with('/'))
                     && (agent.contains("mailto:") || agent.contains("https://")),
-                "CRAWLER_USER_AGENT must start with RustKnowledgeCollector/ and contain a real contact (mailto: or https://)"
+                "CRAWLER_USER_AGENT must start with {AGENT_PRODUCT}/ and contain a real contact (mailto: or https://)"
             );
             reqwest::header::HeaderValue::from_str(agent).context("invalid crawler User-Agent")?;
         }

@@ -73,7 +73,7 @@ pub async fn execute(
     let mut count = 0u64;
     let mut corpus_hash = Sha256::new();
     let mut source_counts = BTreeMap::<String, u64>::new();
-    let mut completeness_counts = BTreeMap::<String, u64>::new();
+    let mut completeness_counts = BTreeMap::<&str, u64>::new();
     let mut parser_versions = BTreeSet::new();
     let mut referenced_fetches = BTreeSet::new();
     loop {
@@ -111,30 +111,37 @@ pub async fn execute(
             }
             count += 1;
             *source_counts.entry(doc.source).or_default() += 1;
-            *completeness_counts.entry(doc.completeness).or_default() += 1;
+            *completeness_counts
+                .entry(doc.completeness.as_str())
+                .or_default() += 1;
             parser_versions.insert(doc.parser_version);
             referenced_fetches.extend(doc.fetch_ids);
         }
     }
-    let mut files = Vec::new();
-    let mut checksums = BTreeMap::new();
+    let mut finished = Vec::new();
     for (format, mut file) in outputs {
         if format == ExportFormat::Json {
             file.write_all(b"]\n").await?;
         }
         file.flush().await?;
         let (size, sha256) = checksum(&mut file).await?;
+        finished.push((format, file, size, sha256));
+    }
+    if query.format != ExportFormat::Zip {
+        let (_, file, size, sha256) = finished.remove(0);
+        return Ok(ExportArtifact {
+            file,
+            size,
+            sha256,
+            count,
+            snapshot_at,
+        });
+    }
+    let mut files = Vec::new();
+    let mut checksums = BTreeMap::new();
+    for (format, file, size, sha256) in finished {
         let name = format!("corpus.{}", format.extension());
         checksums.insert(name.clone(), json!({"bytes": size, "sha256": sha256}));
-        if query.format != ExportFormat::Zip {
-            return Ok(ExportArtifact {
-                file,
-                size,
-                sha256,
-                count,
-                snapshot_at,
-            });
-        }
         files.push((name, file.into_std().await));
     }
     let manifest = serde_json::to_vec_pretty(&json!({
@@ -154,8 +161,8 @@ pub async fn execute(
         "limitations": [
             "Current normalized versions only, not historical snapshots of each document",
             "Unknown language/category/dates/license identifiers are not inferred",
-            "Partial and unknown topics do not prove full topic coverage",
-            "Missing section link attribution and anchor text remain null"
+            "complete means every page of a topic was collected in sequence as of fetch time; the source's own post count is not verified",
+            "Links include in-page anchors and footnotes"
         ]
     }))?;
     let file = tokio::task::spawn_blocking(move || -> Result<std::fs::File, Error> {
@@ -394,7 +401,7 @@ mod tests {
                 title: "=SUM(1,2)".into(),
                 body_text: "Привет, \"Rust\"\r\nsecond line\n第三行".into(),
                 content_hash: "hash".into(),
-                completeness: "unknown".into(),
+                completeness: Completeness::Unknown,
                 completeness_reason: "fixture".into(),
                 parser_version: "fixture".into(),
                 fetched_at: now,

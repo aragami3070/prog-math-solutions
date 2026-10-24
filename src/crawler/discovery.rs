@@ -36,7 +36,7 @@ pub fn normalize(source: Source, input: &str) -> Result<Url> {
             if matches!(url.path(), "/rfcs/" | "/rfcs/index.html") {
                 url.set_path("/rfcs/");
             } else if url.path() != "/rfcs/toc.html" {
-                super::sources::validate_url(source, url.as_str())?;
+                validate_url(source, url.as_str())?;
             }
         }
         Source::Internals => {
@@ -75,10 +75,54 @@ pub fn normalize(source: Source, input: &str) -> Result<Url> {
     Ok(url)
 }
 
+pub fn validate_url(source: Source, input: &str) -> Result<(Url, String)> {
+    let mut url = Url::parse(input)?;
+    let origin = Url::parse(source.origin())?;
+    ensure!(
+        url.scheme() == "https"
+            && url.host_str() == origin.host_str()
+            && url.port_or_known_default() == Some(443),
+        "URL must belong to the selected HTTPS source"
+    );
+    ensure!(
+        url.username().is_empty() && url.password().is_none() && url.query().is_none(),
+        "credentials and query parameters are not accepted"
+    );
+    ensure!(!url.path().contains('%'), "encoded paths are not accepted");
+    url.set_fragment(None);
+    let parts: Vec<_> = url.path().trim_matches('/').split('/').collect();
+    let native_id = match source {
+        Source::Internals => {
+            ensure!(
+                parts.first() == Some(&"t") && (parts.len() == 2 || parts.len() == 3),
+                "expected an Internals topic URL, without post pagination"
+            );
+            parts.last().unwrap().to_string()
+        }
+        Source::Rfc => {
+            ensure!(
+                parts.len() == 2 && parts[0] == "rfcs" && parts[1].ends_with(".html"),
+                "expected an RFC HTML document"
+            );
+            let Some((id, _)) = parts[1].split_once('-') else {
+                bail!("expected a numbered RFC")
+            };
+            id.to_string()
+        }
+    };
+    ensure!(
+        !native_id.is_empty() && native_id.chars().all(|c| c.is_ascii_digit()),
+        "invalid document ID"
+    );
+    let id: u64 = native_id.parse()?;
+    ensure!(id > 0, "document ID must be positive");
+    Ok((url, id.to_string()))
+}
+
 pub fn is_document(source: Source, url: &Url) -> bool {
     match source {
         Source::Internals => url.path().starts_with("/t/"),
-        Source::Rfc => super::sources::validate_url(source, url.as_str()).is_ok(),
+        Source::Rfc => validate_url(source, url.as_str()).is_ok(),
     }
 }
 
@@ -101,6 +145,30 @@ pub fn links(source: Source, base: &Url, html: &str) -> Vec<Url> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn source_allowlist_rejects_non_documents() {
+        for url in [
+            "http://internals.rust-lang.org/t/name/6",
+            "https://localhost/t/name/6",
+            "https://internals.rust-lang.org/search",
+            "https://internals.rust-lang.org/t/name/6/2",
+            "https://internals.rust-lang.org/t/name/6?x=1",
+            "https://u:p@internals.rust-lang.org/t/name/6",
+        ] {
+            assert!(validate_url(Source::Internals, url).is_err(), "{url}");
+        }
+        assert!(validate_url(Source::Rfc, "https://rust-lang.github.io/rfcs/print.html").is_err());
+        assert_eq!(
+            validate_url(
+                Source::Rfc,
+                "https://rust-lang.github.io/rfcs/0001-private-fields.html#heading"
+            )
+            .unwrap()
+            .1,
+            "1"
+        );
+    }
     #[test]
     fn discovers_navigation_and_deduplicates_topics() {
         let urls = links(

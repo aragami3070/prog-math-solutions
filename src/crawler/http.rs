@@ -8,10 +8,13 @@ use url::Url;
 
 use super::discovery::normalize;
 use super::{errors::Blocked, persistence::Persistence};
-use crate::models::{crawls::FetchRecord, sources::Source};
+use crate::config::AGENT_PRODUCT;
+use crate::models::{
+    crawls::{FetchKind, FetchRecord},
+    sources::Source,
+};
 
 const MAX_BYTES: usize = 2 * 1024 * 1024;
-pub const AGENT_PRODUCT: &str = "RustKnowledgeCollector";
 
 pub struct Response {
     pub status: u16,
@@ -66,7 +69,7 @@ impl<'a> Transport<'a> {
         let response = self
             .request(
                 Url::parse(&format!("{}/robots.txt", self.source.origin()))?,
-                "robots",
+                FetchKind::Robots,
             )
             .await?;
         self.robots = match response.status {
@@ -114,7 +117,7 @@ impl<'a> Transport<'a> {
                 allowed(&self.robots, current.as_str()),
                 "robots disallows document URL"
             );
-            let response = self.request(current.clone(), "document").await?;
+            let response = self.request(current.clone(), FetchKind::Document).await?;
             if (300..400).contains(&response.status) {
                 let location = response
                     .location
@@ -145,7 +148,7 @@ impl<'a> Transport<'a> {
         allowed(&self.robots, url.as_str())
     }
 
-    async fn request(&mut self, url: Url, kind: &str) -> Result<Response> {
+    async fn request(&mut self, url: Url, kind: FetchKind) -> Result<Response> {
         // The first request also waits, so serial runs and restarts cannot burst.
         tokio::time::sleep(self.delay).await;
         // Losing the connection means losing the distributed crawl lock: fail closed.

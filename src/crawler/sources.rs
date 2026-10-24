@@ -1,57 +1,14 @@
-use anyhow::{Result, bail, ensure};
+use anyhow::{Result, ensure};
 use chrono::{DateTime, Utc};
 use scraper::{ElementRef, Html, Selector};
 use std::collections::HashSet;
 use url::Url;
 
+use super::discovery::{normalize, validate_url};
 use crate::models::sources::{ParsedLink, ParsedPage, ParsedPost, Source};
 
 /// Stored with every document; bump when parsing changes what is extracted.
 pub const PARSER_VERSION: &str = "html-v2";
-
-pub fn validate_url(source: Source, input: &str) -> Result<(Url, String)> {
-    let mut url = Url::parse(input)?;
-    let origin = Url::parse(source.origin())?;
-    ensure!(
-        url.scheme() == "https"
-            && url.host_str() == origin.host_str()
-            && url.port_or_known_default() == Some(443),
-        "URL must belong to the selected HTTPS source"
-    );
-    ensure!(
-        url.username().is_empty() && url.password().is_none() && url.query().is_none(),
-        "credentials and query parameters are not accepted"
-    );
-    ensure!(!url.path().contains('%'), "encoded paths are not accepted");
-    url.set_fragment(None);
-    let parts: Vec<_> = url.path().trim_matches('/').split('/').collect();
-    let native_id = match source {
-        Source::Internals => {
-            ensure!(
-                parts.first() == Some(&"t") && (parts.len() == 2 || parts.len() == 3),
-                "expected an Internals topic URL, without post pagination"
-            );
-            parts.last().unwrap().to_string()
-        }
-        Source::Rfc => {
-            ensure!(
-                parts.len() == 2 && parts[0] == "rfcs" && parts[1].ends_with(".html"),
-                "expected an RFC HTML document"
-            );
-            let Some((id, _)) = parts[1].split_once('-') else {
-                bail!("expected a numbered RFC")
-            };
-            id.to_string()
-        }
-    };
-    ensure!(
-        !native_id.is_empty() && native_id.chars().all(|c| c.is_ascii_digit()),
-        "invalid document ID"
-    );
-    let id: u64 = native_id.parse()?;
-    ensure!(id > 0, "document ID must be positive");
-    Ok((url, id.to_string()))
-}
 
 fn selector(css: &str) -> Selector {
     Selector::parse(css).expect("static CSS selector")
@@ -96,7 +53,7 @@ fn code_blocks(body: ElementRef<'_>) -> Vec<String> {
 }
 
 pub fn parse(source: Source, url: &str, html: &str) -> Result<ParsedPage> {
-    let page_url = super::discovery::normalize(source, url)?;
+    let page_url = normalize(source, url)?;
     let mut canonical = page_url.clone();
     canonical.set_query(None);
     let (url, native_id) = validate_url(source, canonical.as_str())?;
@@ -183,30 +140,6 @@ pub fn parse(source: Source, url: &str, html: &str) -> Result<ParsedPage> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn source_allowlist_rejects_non_documents() {
-        for url in [
-            "http://internals.rust-lang.org/t/name/6",
-            "https://localhost/t/name/6",
-            "https://internals.rust-lang.org/search",
-            "https://internals.rust-lang.org/t/name/6/2",
-            "https://internals.rust-lang.org/t/name/6?x=1",
-            "https://u:p@internals.rust-lang.org/t/name/6",
-        ] {
-            assert!(validate_url(Source::Internals, url).is_err(), "{url}");
-        }
-        assert!(validate_url(Source::Rfc, "https://rust-lang.github.io/rfcs/print.html").is_err());
-        assert_eq!(
-            validate_url(
-                Source::Rfc,
-                "https://rust-lang.github.io/rfcs/0001-private-fields.html#heading"
-            )
-            .unwrap()
-            .1,
-            "1"
-        );
-    }
 
     #[test]
     fn rfc_parser_extracts_main_and_preserves_code() {

@@ -1,4 +1,3 @@
-pub mod acquire_lock;
 pub mod check_lease;
 pub mod complete_page;
 pub mod errors;
