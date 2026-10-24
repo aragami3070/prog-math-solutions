@@ -168,7 +168,7 @@ pub async fn execute(
     let file = tokio::task::spawn_blocking(move || -> Result<std::fs::File, Error> {
         let mut zip = zip::ZipWriter::new(tempfile::tempfile()?);
         let options = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
+            .compression_method(zip::CompressionMethod::Deflated);
         for (name, mut file) in files {
             zip.start_file(name, options)?;
             std::io::copy(&mut file, &mut zip)?;

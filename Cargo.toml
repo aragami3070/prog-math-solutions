@@ -10,7 +10,7 @@ axum = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 csv = "1.4"
 tempfile = "3"
-zip = { version = "3", default-features = false }
+zip = { version = "3", default-features = false, features = ["deflate"] }
 dotenvy = "0.15.7"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip"] }
 robotstxt = "0.3"
