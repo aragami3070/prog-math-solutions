@@ -78,7 +78,9 @@ pub async fn execute(
     let mut parser_versions = BTreeSet::new();
     let mut referenced_fetches = BTreeSet::new();
     loop {
-        let batch = sources::export_batch(tx, query.source, query.complete_only, (&after.0, &after.1)).await?;
+        let batch =
+            sources::export_batch(tx, query.source, query.complete_only, (&after.0, &after.1))
+                .await?;
         if batch.is_empty() {
             break;
         }

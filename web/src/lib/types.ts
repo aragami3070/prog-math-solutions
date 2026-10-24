@@ -56,3 +56,41 @@ export interface Statistics {
   sources: SourceStats[];
   recent_runs: CrawlRun[];
 }
+
+export interface SnippetPart {
+  text: string;
+  matched: boolean;
+}
+
+export interface SearchHit {
+  id: number;
+  document_id: string;
+  source: SourceId;
+  title: string;
+  url: string;
+  completeness: Completeness;
+  score: number;
+  snippet: SnippetPart[];
+}
+
+export interface SearchResults {
+  query: string;
+  hits: SearchHit[];
+  total: number;
+  page: number;
+  page_size: number;
+  scope: {
+    mode: string;
+    analyzer_version: string;
+    generation: string;
+    indexed_documents: number;
+    max_depth: number;
+  };
+  took_ms: number;
+}
+
+export interface RebuildResult {
+  generation: string;
+  documents: number;
+  took_ms: number;
+}

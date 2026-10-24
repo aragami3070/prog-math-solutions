@@ -1,4 +1,4 @@
-import type { CrawlRun, ExportFormat, SourceId } from "./types";
+import type { CrawlRun, ExportFormat, RebuildResult, SourceId } from "./types";
 
 export async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(path, { signal, headers: { Accept: "application/json" } });
@@ -42,4 +42,9 @@ async function errorMessage(response: Response) {
 async function decode<T>(response: Response): Promise<T> {
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json() as Promise<T>;
+}
+
+export async function rebuildSearchIndex(): Promise<RebuildResult> {
+  const response = await fetch("/api/search/rebuild", { method: "POST", headers: { Accept: "application/json" } });
+  return decode<RebuildResult>(response);
 }

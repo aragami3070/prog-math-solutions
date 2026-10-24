@@ -15,6 +15,9 @@ export function Layout() {
           <Link to="/" search={FIRST_PAGE} activeOptions={{ exact: true }} activeProps={{ className: "active" }}>
             <span aria-hidden>▤</span> Собранные страницы
           </Link>
+          <Link to="/search" search={{ q: "", source: "", complete_only: false, page: 1 }} activeProps={{ className: "active" }}>
+            <span aria-hidden>⌕</span> Поиск
+          </Link>
           <Link to="/stats" activeProps={{ className: "active" }}>
             <span aria-hidden>▥</span> Статистика
           </Link>

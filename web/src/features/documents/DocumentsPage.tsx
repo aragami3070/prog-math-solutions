@@ -1,14 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
+import { DocumentCard } from "../../components/DocumentCard";
 import { ErrorPanel, Loading } from "../../components/Feedback";
 import { PageHeading } from "../../components/PageHeading";
 import { Pagination } from "../../components/Pagination";
 import { get } from "../../lib/client";
-import { number } from "../../lib/format";
+import { date, number } from "../../lib/format";
 import { PAGE_SIZES } from "../../lib/pagination";
 import type { DocumentPage } from "../../lib/types";
 import { CrawlControls } from "../crawl/CrawlControls";
-import { DocumentCard } from "./DocumentCard";
 
 const route = getRouteApi("/");
 const POLL_MS = 15_000;
@@ -50,7 +50,19 @@ export function DocumentsPage() {
           ) : (
             <div className="documents">
               {data.items.map((doc, index) => (
-                <DocumentCard key={doc.id} doc={doc} position={(data.page - 1) * data.page_size + index + 1} />
+                <DocumentCard
+                  key={doc.id}
+                  position={(data.page - 1) * data.page_size + index + 1}
+                  source={doc.source}
+                  label={`#${doc.native_id}`}
+                  title={doc.title}
+                  url={doc.canonical_url}
+                  completeness={doc.completeness}
+                  completenessReason={doc.completeness_reason}
+                  footer={<><span>{number(doc.text_chars)} символов</span><span>Получено {date(doc.last_seen_at)}</span></>}
+                >
+                  {doc.excerpt}
+                </DocumentCard>
               ))}
             </div>
           )}

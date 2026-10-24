@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { pagination } from "./pagination";
+import { pagination, searchParams, searchPath } from "./pagination";
 import { download, exportUrl, get, startCrawl } from "./client";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -39,4 +39,18 @@ it("shows the reason when a source cannot start", async () => {
 it("reports an export error instead of saving it as a file", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response('{"error":"Export failed"}', { status: 500 })));
   await expect(download("/api/sources/export?format=zip", "corpus.zip")).rejects.toThrow("Export failed");
+});
+
+it("builds a search path with only the filters that are set", () => {
+  const params = { q: "async fn", source: "" as const, complete_only: false, page: 2 };
+  const url = new URL(searchPath(params), "http://localhost");
+  expect(Object.fromEntries(url.searchParams)).toEqual({ q: "async fn", page: "2", page_size: "20" });
+  const filtered = new URL(searchPath({ ...params, source: "rfc", complete_only: true }), "http://localhost");
+  expect(filtered.searchParams.get("source")).toBe("rfc");
+  expect(filtered.searchParams.get("complete_only")).toBe("true");
+});
+
+it("validates search parameters from the URL", () => {
+  expect(searchParams({ q: "x", source: "evil", complete_only: "true", page: "0" })).toEqual({ q: "x", source: "", complete_only: true, page: 1 });
+  expect(searchParams({ q: "a".repeat(500) }).q).toHaveLength(200);
 });

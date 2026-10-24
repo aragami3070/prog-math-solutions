@@ -14,6 +14,8 @@ pub struct Config {
     pub crawl_delay: Duration,
     /// A stored page younger than this is reused instead of requested again; zero disables reuse.
     pub fresh_for: Duration,
+    /// Where search index generations are kept.
+    pub search_dir: PathBuf,
 }
 
 impl Config {
@@ -48,6 +50,9 @@ impl Config {
             crawler_user_agent: agent,
             crawl_delay: Duration::from_secs(seconds),
             fresh_for,
+            search_dir: env::var("SEARCH_INDEX_DIR")
+                .unwrap_or_else(|_| "data/index".into())
+                .into(),
         })
     }
 }

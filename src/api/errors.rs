@@ -76,3 +76,23 @@ impl From<use_cases::health::errors::Error> for Error {
         Self::database(error)
     }
 }
+impl From<use_cases::search::errors::Error> for Error {
+    fn from(error: use_cases::search::errors::Error) -> Self {
+        use use_cases::search::errors::Error as SearchError;
+        match error {
+            SearchError::InvalidPagination | SearchError::InvalidQuery(_) => {
+                Self(StatusCode::BAD_REQUEST, error.to_string())
+            }
+            SearchError::NotBuilt => Self(StatusCode::SERVICE_UNAVAILABLE, error.to_string()),
+            SearchError::Busy => Self(StatusCode::CONFLICT, error.to_string()),
+            SearchError::Repository(error) => Self::database(error),
+            error => {
+                tracing::error!(%error, "search failed");
+                Self(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Search is temporarily unavailable".into(),
+                )
+            }
+        }
+    }
+}

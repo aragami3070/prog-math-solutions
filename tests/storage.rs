@@ -204,6 +204,7 @@ async fn collection_lifecycle(pool: PgPool) {
         crawler_user_agent: None,
         crawl_delay: std::time::Duration::from_secs(5),
         fresh_for: std::time::Duration::from_secs(3600),
+        search_dir: std::env::temp_dir().join("rks-test-index"),
     };
     let app = api::router(AppState::new(pool.clone(), &config), &config.web_dist);
     let response = app
@@ -446,9 +447,15 @@ async fn crawl_frontier_checkpoints_deduplicates_and_resumes(pool: PgPool) {
             .unwrap()
             .is_none()
     );
-    crawls::finish::execute(&mut tx, run.id, Source::Internals, RunStatus::Completed, None)
-        .await
-        .unwrap();
+    crawls::finish::execute(
+        &mut tx,
+        run.id,
+        Source::Internals,
+        RunStatus::Completed,
+        None,
+    )
+    .await
+    .unwrap();
     tx.commit().await.unwrap();
     guard.close().await.unwrap();
     let report = stats(&pool).await;

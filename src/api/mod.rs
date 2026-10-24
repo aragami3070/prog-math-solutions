@@ -1,6 +1,7 @@
 pub mod crawls;
 pub mod errors;
 pub mod health;
+pub mod search;
 pub mod sources;
 pub mod statistics;
 
@@ -10,9 +11,11 @@ use crate::{
     models::{
         crawls::{CrawlRequest, CrawlRun, RunStatus},
         exports::ExportFormat,
+        search::{RebuildResult, SearchResults, SearchScope},
         sources::{Completeness, DocumentPage, DocumentSummary, Source},
         statistics::{SourceStats, Statistics},
     },
+    search::{Hit, SearchHandle, SnippetPart},
 };
 use axum::{Json, Router, extract::DefaultBodyLimit, http::StatusCode};
 use errors::ErrorBody;
@@ -31,6 +34,7 @@ pub struct AppState {
     pub pool: PgPool,
     pub crawler: Crawler,
     pub export_slots: Arc<Semaphore>,
+    pub search: Arc<SearchHandle>,
 }
 
 impl AppState {
@@ -44,6 +48,7 @@ impl AppState {
             ),
             pool,
             export_slots: Arc::new(Semaphore::new(1)),
+            search: Arc::new(SearchHandle::open(&config.search_dir)),
         }
     }
 }
@@ -56,7 +61,9 @@ impl AppState {
         sources::export,
         statistics::get_statistics,
         crawls::start,
-        sources::resume
+        sources::resume,
+        search::search,
+        search::rebuild
     ),
     components(schemas(
         Source,
@@ -69,6 +76,11 @@ impl AppState {
         DocumentPage,
         SourceStats,
         Statistics,
+        SearchResults,
+        SearchScope,
+        RebuildResult,
+        Hit,
+        SnippetPart,
         ErrorBody
     ))
 )]
@@ -78,6 +90,7 @@ pub fn router(state: AppState, web_dist: &std::path::Path) -> Router {
     let api = Router::new()
         .merge(health::router())
         .merge(sources::router())
+        .merge(search::router())
         .merge(crawls::router())
         .merge(statistics::router())
         .fallback(|| async {
