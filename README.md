@@ -86,7 +86,7 @@ ZIP содержит `corpus.jsonl`, `corpus.json`, `corpus.csv`, `manifest.json
 
 `documents` — тема или RFC. `document_pages` — одна строка на HTTP-страницу темы (`/t/42`, `/t/42?page=2`), `posts` — один пост (текст хранится только здесь), `links` — ссылки поста с текстом якоря. `documents.body_text`, `content_hash` и `completeness` — производные: пересчитываются из постов и страниц при каждом сохранении страницы. Сырой HTML остаётся в `fetches`.
 
-Перед миграциями рабочей БД делайте дамп: `pg_dump "$DATABASE_URL" -Fc -f backup.dump`.
+Перед миграциями рабочей БД и по расписанию делайте дамп: `scripts/backup.sh [метка]`. Он пишет проверенный дамп (`pg_restore --list`) и `.sha256` в `~/backups/rust-knowledge/`, при `BACKUP_MIRROR=/другой/диск` копирует его туда и хранит `BACKUP_KEEP` (14) последних дампов без метки; дампы с меткой не удаляются. Восстановление: `pg_restore -d "$DATABASE_URL" --clean --if-exists файл.dump`.
 
 ## Проверки
 
