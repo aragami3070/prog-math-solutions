@@ -1,5 +1,5 @@
 use super::errors::Error;
-use crate::repository::crawls;
+use crate::{models::crawls::QueueLink, repository::crawls};
 use sqlx::{Postgres, Transaction};
 
 pub async fn execute(
@@ -7,7 +7,7 @@ pub async fn execute(
     run_id: i64,
     page_id: i64,
     error: &str,
-    links: &[String],
+    links: &[QueueLink],
 ) -> Result<(), Error> {
     crawls::enqueue(tx, run_id, links).await?;
     crawls::finish_page(tx, run_id, page_id, Some(error)).await?;

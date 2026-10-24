@@ -80,14 +80,33 @@ pub struct CrawlPlan {
     pub delay: Duration,
 }
 
+/// A page waiting in the queue. `url` is its canonical identity; `fetch_url` is what is requested.
 pub struct QueuedPage {
     pub id: i64,
     pub url: String,
+    pub fetch_url: String,
+}
+
+/// A discovered page: canonical identity plus the URL to request (it may carry a topic slug).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QueueLink {
+    pub url: String,
+    pub fetch_url: String,
+}
+
+impl QueueLink {
+    pub fn same(url: impl Into<String>) -> Self {
+        let url = url.into();
+        Self {
+            fetch_url: url.clone(),
+            url,
+        }
+    }
 }
 
 pub struct CollectedPage {
     pub id: i64,
     pub fetch_id: i64,
     pub parsed: Option<ParsedPage>,
-    pub links: Vec<String>,
+    pub links: Vec<QueueLink>,
 }

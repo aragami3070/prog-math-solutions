@@ -3,7 +3,9 @@ use rust_knowledge::{
     config::Config,
     crawler::sources::parse,
     models::{
-        crawls::{CollectedPage, CrawlPlan, CrawlRun, FetchKind, FetchRecord, RunStatus},
+        crawls::{
+            CollectedPage, CrawlPlan, CrawlRun, FetchKind, FetchRecord, QueueLink, RunStatus,
+        },
         pagination::Pagination,
         sources::{Completeness, Source},
         statistics::Statistics,
@@ -337,7 +339,11 @@ async fn crawl_frontier_checkpoints_deduplicates_and_resumes(pool: PgPool) {
         id: seed.id,
         fetch_id: 0, // Navigation pages do not create a document.
         parsed: None,
-        links: vec![seed.url.clone(), URL.into(), URL.into()],
+        links: vec![
+            QueueLink::same(seed.url.clone()),
+            QueueLink::same(URL),
+            QueueLink::same(URL),
+        ],
     };
     crawls::complete_page::execute(&mut tx, run.id, Source::Rfc, page())
         .await
@@ -425,7 +431,7 @@ async fn crawl_frontier_checkpoints_deduplicates_and_resumes(pool: PgPool) {
             id: doc_page.id,
             fetch_id,
             parsed: Some(parse(Source::Rfc, URL, HTML).unwrap()),
-            links: vec![seed.url, URL.into()],
+            links: vec![QueueLink::same(seed.url), QueueLink::same(URL)],
         },
     )
     .await
@@ -452,5 +458,61 @@ async fn crawl_frontier_checkpoints_deduplicates_and_resumes(pool: PgPool) {
     );
     let (fresh, guard) = start_run(&pool, Source::Rfc).await.unwrap();
     assert_ne!(fresh.id, run.id);
+    guard.close().await.unwrap();
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[ignore = "requires a PostgreSQL test role with CREATEDB; see README"]
+async fn queue_requests_the_slug_url_but_deduplicates_by_identity(pool: PgPool) {
+    let (run, guard) = start_run(&pool, Source::Internals).await.unwrap();
+    let topic = "https://internals.rust-lang.org/t/42";
+    let slugged = "https://internals.rust-lang.org/t/the-slug/42";
+    let link = |fetch_url: &str| QueueLink {
+        url: topic.into(),
+        fetch_url: fetch_url.into(),
+    };
+    let mut tx = pool.begin().await.unwrap();
+    let seed = crawls::next_page::execute(&mut tx, run.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(seed.fetch_url, seed.url);
+    // A slug-less sighting first, then the same page with a slug, then a different slug.
+    for fetch_url in [
+        topic,
+        slugged,
+        "https://internals.rust-lang.org/t/old-slug/42",
+    ] {
+        crawls::complete_page::execute(
+            &mut tx,
+            run.id,
+            Source::Internals,
+            CollectedPage {
+                id: seed.id,
+                fetch_id: 0,
+                parsed: None,
+                links: vec![link(fetch_url)],
+            },
+        )
+        .await
+        .unwrap();
+    }
+    tx.commit().await.unwrap();
+    let rows = sqlx::query!(
+        r#"
+        SELECT url, fetch_url
+        FROM crawl_queue
+        WHERE run_id = $1 AND url = $2
+        "#,
+        run.id,
+        topic,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].fetch_url, slugged);
+    // Both sightings count once: the seed and the topic.
+    assert_eq!(stats(&pool).await.recent_runs[0].requested, 2);
     guard.close().await.unwrap();
 }

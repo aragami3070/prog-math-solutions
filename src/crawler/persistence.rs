@@ -1,6 +1,6 @@
 use crate::{
     models::{
-        crawls::{CollectedPage, FetchRecord, QueuedPage, RunStatus},
+        crawls::{CollectedPage, FetchRecord, QueueLink, QueuedPage, RunStatus},
         sources::Source,
     },
     use_cases::crawls,
@@ -54,7 +54,7 @@ impl Persistence {
         &self,
         page_id: i64,
         error: &str,
-        links: &[String],
+        links: &[QueueLink],
     ) -> anyhow::Result<()> {
         let mut tx = self.pool.begin().await?;
         crawls::fail_page::execute(&mut tx, self.run_id, page_id, error, links).await?;

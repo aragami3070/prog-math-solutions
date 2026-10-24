@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            body_text, content_hash,\n            completeness AS \"completeness: Completeness\", completeness_reason\n        FROM documents\n        WHERE source = 'internals' AND native_id = '42'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "body_text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "content_hash",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "completeness: Completeness",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "completeness_reason",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1b99b779dc790ab5c01d748a0ef365cfff5ce05963e5b348998f3fc094bbfca7"
+}

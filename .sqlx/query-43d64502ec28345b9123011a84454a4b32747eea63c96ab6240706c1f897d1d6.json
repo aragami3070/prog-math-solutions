@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE crawl_queue AS q\n        SET fetch_url = t.fetch_url\n        FROM UNNEST($2::TEXT[], $3::TEXT[]) AS t(url, fetch_url)\n        WHERE q.run_id = $1\n          AND q.url = t.url\n          AND q.status = 'pending'\n          AND q.fetch_url = q.url\n          AND t.fetch_url <> t.url\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "43d64502ec28345b9123011a84454a4b32747eea63c96ab6240706c1f897d1d6"
+}

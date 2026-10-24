@@ -1,7 +1,7 @@
 use super::errors::Error;
 use crate::{
     crawler::{Crawler, discovery},
-    models::crawls::{CrawlPlan, CrawlRequest, CrawlRun},
+    models::crawls::{CrawlPlan, CrawlRequest, CrawlRun, QueueLink},
     repository::{crawls, sources},
 };
 use sqlx::{Postgres, Transaction};
@@ -33,7 +33,7 @@ pub async fn execute(
         crawls::reset_failed_pages(tx, run.id).await?;
         return Ok(crawls::restart(tx, run.id).await?);
     }
-    let seeds = vec![discovery::seed(plan.source).to_string()];
+    let seeds = vec![QueueLink::same(discovery::seed(plan.source))];
     let mut run = crawls::insert(tx, plan.source, 0).await?;
     crawls::enqueue(tx, run.id, &seeds).await?;
     run.requested = seeds.len() as i32;

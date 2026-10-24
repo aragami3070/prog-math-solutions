@@ -1,6 +1,6 @@
 use super::errors::Error;
 use crate::models::{
-    crawls::{CrawlRun, FetchRecord, QueuedPage, RunStatus},
+    crawls::{CrawlRun, FetchRecord, QueueLink, QueuedPage, RunStatus},
     sources::Source,
 };
 use sqlx::{Postgres, Transaction};
@@ -148,13 +148,16 @@ pub async fn recent(tx: &mut Transaction<'_, Postgres>) -> Result<Vec<CrawlRun>,
 pub async fn enqueue(
     tx: &mut Transaction<'_, Postgres>,
     run_id: i64,
-    urls: &[String],
+    links: &[QueueLink],
 ) -> Result<(), Error> {
+    let urls: Vec<String> = links.iter().map(|l| l.url.clone()).collect();
+    let fetch_urls: Vec<String> = links.iter().map(|l| l.fetch_url.clone()).collect();
     sqlx::query!(
         r#"
         WITH added AS (
-            INSERT INTO crawl_queue (run_id, url)
-            SELECT $1, url FROM UNNEST($2::TEXT[]) AS url
+            INSERT INTO crawl_queue (run_id, url, fetch_url)
+            SELECT $1, t.url, t.fetch_url
+            FROM UNNEST($2::TEXT[], $3::TEXT[]) AS t(url, fetch_url)
             ON CONFLICT (run_id, url) DO NOTHING
             RETURNING id
         )
@@ -163,7 +166,26 @@ pub async fn enqueue(
         WHERE id = $1
         "#,
         run_id,
-        urls,
+        &urls,
+        &fetch_urls,
+    )
+    .execute(&mut **tx)
+    .await?;
+    // A page first seen through a slug-less link learns its slug from a later sighting.
+    sqlx::query!(
+        r#"
+        UPDATE crawl_queue AS q
+        SET fetch_url = t.fetch_url
+        FROM UNNEST($2::TEXT[], $3::TEXT[]) AS t(url, fetch_url)
+        WHERE q.run_id = $1
+          AND q.url = t.url
+          AND q.status = 'pending'
+          AND q.fetch_url = q.url
+          AND t.fetch_url <> t.url
+        "#,
+        run_id,
+        &urls,
+        &fetch_urls,
     )
     .execute(&mut **tx)
     .await?;
@@ -177,7 +199,7 @@ pub async fn next_page(
     Ok(sqlx::query_as!(
         QueuedPage,
         r#"
-        SELECT id, url FROM crawl_queue
+        SELECT id, url, fetch_url FROM crawl_queue
         WHERE run_id = $1 AND status = 'pending'
         ORDER BY id LIMIT 1
         "#,

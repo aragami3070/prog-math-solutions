@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT url, fetch_url\n        FROM crawl_queue\n        WHERE run_id = $1 AND url = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "fetch_url",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "6d9bbef2f42444d08c155195de4f71a25b03bbbd766d0194478dba87d310f7b7"
+}

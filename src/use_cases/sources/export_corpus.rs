@@ -377,6 +377,7 @@ fn csv_record(doc: &ExportDocument, safe: bool) -> Result<Vec<u8>, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::sources::Completeness;
 
     fn post(number: i32, text: &str) -> ExportPost {
         ExportPost {

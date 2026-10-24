@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, url FROM crawl_queue\n        WHERE run_id = $1 AND status = 'pending'\n        ORDER BY id LIMIT 1\n        ",
+  "query": "\n        SELECT id, url, fetch_url FROM crawl_queue\n        WHERE run_id = $1 AND status = 'pending'\n        ORDER BY id LIMIT 1\n        ",
   "describe": {
     "columns": [
       {
@@ -12,6 +12,11 @@
         "ordinal": 1,
         "name": "url",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "fetch_url",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -21,8 +26,9 @@
     },
     "nullable": [
       false,
+      false,
       false
     ]
   },
-  "hash": "fd278338b32bff8ae92c9f7276ae63b8c3ca1391444f68d3049c4882dbd11308"
+  "hash": "c5e7f54aac99fee83cac2a3018dab2ca00db3221a9737b22a2e1ea36ddd2bf93"
 }

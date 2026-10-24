@@ -12,6 +12,7 @@ use persistence::Persistence;
 use sqlx::{PgPool, Postgres, pool::PoolConnection};
 use std::{sync::Arc, time::Duration};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use url::Url;
 
 #[derive(Clone)]
 pub struct Crawler {
@@ -102,12 +103,11 @@ async fn collect(
     while let Some(page) = persistence.next_page().await? {
         let mut discovered = Vec::new();
         let outcome: Result<()> = async {
-            let url = discovery::normalize(plan.source, &page.url)?;
+            let url = discovery::fetch_url(plan.source, &page.fetch_url)?;
             let response = transport.document(url).await?;
             discovered = discovery::links(plan.source, &response.url, &response.body)
                 .into_iter()
-                .filter(|url| transport.allowed(url))
-                .map(String::from)
+                .filter(|link| Url::parse(&link.fetch_url).is_ok_and(|url| transport.allowed(&url)))
                 .collect();
             let parsed = if discovery::is_document(plan.source, &response.url) {
                 Some(sources::parse(
