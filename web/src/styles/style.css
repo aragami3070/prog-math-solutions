@@ -55,7 +55,8 @@ select { font-size: 12px; border: 1px solid #d2d8cb; padding: 5px 7px; border-ra
 .empty-icon { font: 32px ui-monospace, monospace; color: #a6b197; }
 .empty h2 { color: #3d4f35; font-size: 20px; margin: 16px 0 10px; }
 .empty p { font-size: 13px; max-width: 420px; margin: 0 auto 20px; }
-.text-link { font-size: 13px; color: #9e5d37; text-underline-offset: 4px; }
+.text-link { font-size: 13px; color: #9e5d37; text-underline-offset: 4px;; background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit; }
+.text-link:disabled { opacity: .5; cursor: wait; }
 .metrics { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 15px; }
 .metric { background: #fff; border: 1px solid #dce2d5; border-radius: 9px; padding: 22px; }
 .metric span { font-size: 11px; color: #76826e; display: block; }

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { exportUrl, get, pagination, startCrawl } from "./api";
+import { pagination } from "./pagination";
+import { download, exportUrl, get, startCrawl } from "./client";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -33,4 +34,9 @@ it("starts a source crawl without a URL batch", async () => {
 it("shows the reason when a source cannot start", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response('{"error":"Source paused"}', { status: 409 })));
   await expect(startCrawl("rfc")).rejects.toThrow("Source paused");
+});
+
+it("reports an export error instead of saving it as a file", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response('{"error":"Export failed"}', { status: 500 })));
+  await expect(download("/api/sources/export?format=zip", "corpus.zip")).rejects.toThrow("Export failed");
 });
