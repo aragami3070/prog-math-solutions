@@ -10,7 +10,7 @@ use crate::models::{
     sources::Source,
 };
 use anyhow::Result;
-use errors::Blocked;
+use errors::{Blocked, Gone};
 use http::Transport;
 use persistence::Persistence;
 use sqlx::{PgPool, Postgres, pool::PoolConnection};
@@ -144,6 +144,12 @@ async fn collect(
                 tracing::debug!(url = %identity, "reused stored page");
                 return Ok(());
             }
+            if persistence
+                .recently_missing(identity.as_str(), plan.fresh_for)
+                .await?
+            {
+                return Err(Gone(404).into());
+            }
             let url = discovery::fetch_url(plan.source, &page.fetch_url)?;
             let response = transport.document(url).await?;
             discovered = discover(&transport, plan.source, &response.url, &response.body);
@@ -171,6 +177,17 @@ async fn collect(
             Ok(())
         }
         .await;
+        // A dead link is settled, not retried, and says nothing about the source's health.
+        if let Err(error) = &outcome
+            && error.downcast_ref::<Gone>().is_some()
+        {
+            persistence
+                .missing_page(page.id, &error.to_string())
+                .await?;
+            tracing::warn!(url = %page.url, "page does not exist, skipped");
+            streak = retry::UnreachableStreak::new();
+            continue;
+        }
         let stop = streak.record(outcome.as_ref().err());
         if let Err(error) = outcome {
             had_errors = true;

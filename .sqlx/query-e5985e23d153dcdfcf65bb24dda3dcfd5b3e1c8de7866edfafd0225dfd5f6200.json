@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        INSERT INTO crawl_runs (source, status, requested)\n        VALUES ($1, 'running', $2)\n        RETURNING\n            id, source, status AS \"status: RunStatus\", requested, succeeded, failed,\n            started_at, finished_at, error\n        ",
+  "query": "\n        SELECT\n            id, source, status AS \"status: RunStatus\", requested, succeeded, failed, missing,\n            started_at, finished_at, error\n        FROM crawl_runs\n        ORDER BY id DESC\n        LIMIT 10\n        ",
   "describe": {
     "columns": [
       {
@@ -35,27 +35,30 @@
       },
       {
         "ordinal": 6,
+        "name": "missing",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
         "name": "started_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "finished_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "error",
         "type_info": "Text"
       }
     ],
     "parameters": {
-      "Left": [
-        "Text",
-        "Int4"
-      ]
+      "Left": []
     },
     "nullable": [
+      false,
       false,
       false,
       false,
@@ -67,5 +70,5 @@
       true
     ]
   },
-  "hash": "4ab01ca5286520344074b4b172ba26d2ad25fcce783b08684c53d0b9dda154a5"
+  "hash": "e5985e23d153dcdfcf65bb24dda3dcfd5b3e1c8de7866edfafd0225dfd5f6200"
 }

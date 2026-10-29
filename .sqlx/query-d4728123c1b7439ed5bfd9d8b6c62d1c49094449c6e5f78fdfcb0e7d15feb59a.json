@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, source, status AS \"status: RunStatus\", requested, succeeded, failed,\n               started_at, finished_at, error\n        FROM crawl_runs AS r\n        WHERE source = $1 AND status IN ('failed', 'interrupted', 'blocked')\n          AND EXISTS (SELECT 1 FROM crawl_queue WHERE run_id = r.id AND status <> 'done')\n        ORDER BY id DESC LIMIT 1\n        ",
+  "query": "\n        INSERT INTO crawl_runs (source, status, requested)\n        VALUES ($1, 'running', $2)\n        RETURNING\n            id, source, status AS \"status: RunStatus\", requested, succeeded, failed, missing,\n            started_at, finished_at, error\n        ",
   "describe": {
     "columns": [
       {
@@ -35,26 +35,33 @@
       },
       {
         "ordinal": 6,
+        "name": "missing",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
         "name": "started_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "finished_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "error",
         "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
-        "Text"
+        "Text",
+        "Int4"
       ]
     },
     "nullable": [
+      false,
       false,
       false,
       false,
@@ -66,5 +73,5 @@
       true
     ]
   },
-  "hash": "3619ee2d4898dd325b3ee95cf61fc451a7634e508f09502e5038494882aa9c66"
+  "hash": "d4728123c1b7439ed5bfd9d8b6c62d1c49094449c6e5f78fdfcb0e7d15feb59a"
 }

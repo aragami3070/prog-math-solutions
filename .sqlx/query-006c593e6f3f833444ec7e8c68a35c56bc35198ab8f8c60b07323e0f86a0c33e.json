@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE crawl_queue SET status = 'missing', error = $3\n        WHERE id = $2 AND run_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "006c593e6f3f833444ec7e8c68a35c56bc35198ab8f8c60b07323e0f86a0c33e"
+}

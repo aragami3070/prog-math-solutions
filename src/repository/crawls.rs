@@ -40,7 +40,7 @@ pub async fn insert(
         INSERT INTO crawl_runs (source, status, requested)
         VALUES ($1, 'running', $2)
         RETURNING
-            id, source, status AS "status: RunStatus", requested, succeeded, failed,
+            id, source, status AS "status: RunStatus", requested, succeeded, failed, missing,
             started_at, finished_at, error
         "#,
         source.as_str(),
@@ -134,7 +134,7 @@ pub async fn recent(tx: &mut Transaction<'_, Postgres>) -> Result<Vec<CrawlRun>,
         CrawlRun,
         r#"
         SELECT
-            id, source, status AS "status: RunStatus", requested, succeeded, failed,
+            id, source, status AS "status: RunStatus", requested, succeeded, failed, missing,
             started_at, finished_at, error
         FROM crawl_runs
         ORDER BY id DESC
@@ -231,6 +231,36 @@ pub async fn finish_page(
     Ok(())
 }
 
+/// Settles a page the source says does not exist; resuming does not retry it.
+pub async fn missing_page(
+    tx: &mut Transaction<'_, Postgres>,
+    run_id: i64,
+    page_id: i64,
+    reason: &str,
+) -> Result<(), Error> {
+    sqlx::query!(
+        r#"
+        UPDATE crawl_queue SET status = 'missing', error = $3
+        WHERE id = $2 AND run_id = $1
+        "#,
+        run_id,
+        page_id,
+        reason,
+    )
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query!(
+        r#"
+        UPDATE crawl_runs SET missing = missing + 1
+        WHERE id = $1
+        "#,
+        run_id,
+    )
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
 pub async fn resumable(
     tx: &mut Transaction<'_, Postgres>,
     source: Source,
@@ -238,11 +268,13 @@ pub async fn resumable(
     Ok(sqlx::query_as!(
         CrawlRun,
         r#"
-        SELECT id, source, status AS "status: RunStatus", requested, succeeded, failed,
+        SELECT id, source, status AS "status: RunStatus", requested, succeeded, failed, missing,
                started_at, finished_at, error
         FROM crawl_runs AS r
         WHERE source = $1 AND status IN ('failed', 'interrupted', 'blocked')
-          AND EXISTS (SELECT 1 FROM crawl_queue WHERE run_id = r.id AND status <> 'done')
+          AND EXISTS (
+              SELECT 1 FROM crawl_queue WHERE run_id = r.id AND status IN ('pending', 'failed')
+          )
         ORDER BY id DESC LIMIT 1
         "#,
         source.as_str(),
@@ -274,7 +306,7 @@ pub async fn restart(tx: &mut Transaction<'_, Postgres>, run_id: i64) -> Result<
         UPDATE crawl_runs
         SET status = 'running', finished_at = NULL, error = NULL, failed = 0
         WHERE id = $1
-        RETURNING id, source, status AS "status: RunStatus", requested, succeeded, failed,
+        RETURNING id, source, status AS "status: RunStatus", requested, succeeded, failed, missing,
                   started_at, finished_at, error
         "#,
         run_id,
@@ -310,5 +342,29 @@ pub async fn fresh_page(
         max_age_secs,
     )
     .fetch_optional(&mut **tx)
+    .await?)
+}
+
+/// Whether an earlier run, started within `max_age_secs`, found this page missing (404/410).
+pub async fn recently_missing(
+    tx: &mut Transaction<'_, Postgres>,
+    url: &str,
+    max_age_secs: f64,
+) -> Result<bool, Error> {
+    Ok(sqlx::query_scalar!(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM crawl_queue AS q
+            JOIN crawl_runs AS r ON r.id = q.run_id
+            WHERE q.url = $1
+              AND q.status = 'missing'
+              AND r.started_at > now() - make_interval(secs => $2)
+        ) AS "missing!"
+        "#,
+        url,
+        max_age_secs,
+    )
+    .fetch_one(&mut **tx)
     .await?)
 }

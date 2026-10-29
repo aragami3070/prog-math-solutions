@@ -28,7 +28,7 @@ export function RunsTable({ runs }: { runs: CrawlRun[] }) {
               </td>
               <td><Badge value={run.status} /></td>
               <td>{run.succeeded} / {run.requested}</td>
-              <td>{run.failed}</td>
+              <td>{run.failed}{run.missing > 0 && <small title="Страницы, которых нет на сайте (404/410): пропущены, не повторяются"> · не найдено {run.missing}</small>}</td>
               <td>{date(run.started_at)}</td>
             </tr>
           ))}

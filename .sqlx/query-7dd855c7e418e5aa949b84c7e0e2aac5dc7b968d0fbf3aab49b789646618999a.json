@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT EXISTS (\n            SELECT 1\n            FROM crawl_queue AS q\n            JOIN crawl_runs AS r ON r.id = q.run_id\n            WHERE q.url = $1\n              AND q.status = 'missing'\n              AND r.started_at > now() - make_interval(secs => $2)\n        ) AS \"missing!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "missing!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7dd855c7e418e5aa949b84c7e0e2aac5dc7b968d0fbf3aab49b789646618999a"
+}

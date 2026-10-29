@@ -48,6 +48,13 @@ impl Persistence {
         Ok(page)
     }
 
+    pub async fn recently_missing(&self, url: &str, window: Duration) -> anyhow::Result<bool> {
+        let mut tx = self.pool.begin().await?;
+        let missing = crawls::recently_missing::execute(&mut tx, url, window).await?;
+        tx.commit().await?;
+        Ok(missing)
+    }
+
     pub async fn next_page(&self) -> anyhow::Result<Option<QueuedPage>> {
         let mut tx = self.pool.begin().await?;
         let page = crawls::next_page::execute(&mut tx, self.run_id).await?;
@@ -70,6 +77,13 @@ impl Persistence {
     ) -> anyhow::Result<()> {
         let mut tx = self.pool.begin().await?;
         crawls::fail_page::execute(&mut tx, self.run_id, page_id, error, links).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn missing_page(&self, page_id: i64, reason: &str) -> anyhow::Result<()> {
+        let mut tx = self.pool.begin().await?;
+        crawls::missing_page::execute(&mut tx, self.run_id, page_id, reason).await?;
         tx.commit().await?;
         Ok(())
     }

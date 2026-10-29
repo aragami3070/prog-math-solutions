@@ -7,3 +7,8 @@ pub struct Blocked(pub String);
 #[derive(Debug, thiserror::Error)]
 #[error("source unreachable: {0}")]
 pub struct Unavailable(pub String);
+
+/// The source answered 404 or 410: the page does not exist. A dead link, not a failure.
+#[derive(Debug, thiserror::Error)]
+#[error("page not found (HTTP {0})")]
+pub struct Gone(pub u16);

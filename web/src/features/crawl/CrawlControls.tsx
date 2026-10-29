@@ -31,7 +31,7 @@ export function CrawlControls() {
     : active ? "Сбор выполняется"
     : latest && RESUMABLE.includes(latest.status) ? "Продолжить сбор"
     : "Начать сбор";
-  const queued = run ? Math.max(0, run.requested - run.succeeded - run.failed) : 0;
+  const queued = run ? Math.max(0, run.requested - run.succeeded - run.failed - run.missing) : 0;
 
   return (
     <section className="crawl-controls" aria-label="Сбор источника">
@@ -56,7 +56,7 @@ export function CrawlControls() {
         {mutation.isSuccess && <p>Запуск #{mutation.data.id} принят. Ход сбора обновляется автоматически.</p>}
         {run && (
           <p>
-            {sourceName(run.source)} · #{run.id}: обработано {number(run.succeeded)}, с ошибками {number(run.failed)},
+            {sourceName(run.source)} · #{run.id}: обработано {number(run.succeeded)}, с ошибками {number(run.failed)},{run.missing > 0 && ` не найдено (404) ${number(run.missing)},`}
             в очереди {number(queued)}. Всего обнаружено {number(run.requested)} страниц.{" "}
             {run.status === "completed" ? "Обход завершён." : run.status === "interrupted" ? "Обход прерван." : ""}
           </p>

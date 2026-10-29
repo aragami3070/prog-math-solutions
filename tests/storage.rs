@@ -13,6 +13,7 @@ use rust_knowledge::{
     use_cases::{crawls, sources, statistics},
 };
 use sqlx::{Connection, PgPool, Postgres, pool::PoolConnection};
+use std::time::Duration;
 
 const URL: &str = "https://rust-lang.github.io/rfcs/3058-try-trait-v2.html";
 const HTML: &str = include_str!("fixtures/rfc.html");
@@ -554,4 +555,74 @@ async fn an_rfc_crawl_starts_from_the_index_and_the_table_of_contents(pool: PgPo
     );
     tx.rollback().await.unwrap();
     guard.close().await.unwrap();
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[ignore = "requires a PostgreSQL test role with CREATEDB; see README"]
+async fn a_missing_page_is_settled_not_retried_and_remembered(pool: PgPool) {
+    let (run, guard) = start_run(&pool, Source::Rfc).await.unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    let page = crawls::next_page::execute(&mut tx, run.id)
+        .await
+        .unwrap()
+        .unwrap();
+    crawls::missing_page::execute(&mut tx, run.id, page.id, "page not found (HTTP 404)")
+        .await
+        .unwrap();
+    let rest = crawls::next_page::execute(&mut tx, run.id)
+        .await
+        .unwrap()
+        .unwrap();
+    crawls::complete_page::execute(
+        &mut tx,
+        run.id,
+        Source::Rfc,
+        CollectedPage {
+            id: rest.id,
+            fetch_id: 0,
+            parsed: None,
+            links: vec![],
+        },
+    )
+    .await
+    .unwrap();
+    crawls::finish::execute(&mut tx, run.id, Source::Rfc, RunStatus::Completed, None)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    guard.close().await.unwrap();
+
+    // Counted apart from errors, and nothing is left to resume.
+    let latest = &stats(&pool).await.recent_runs[0];
+    assert_eq!((latest.succeeded, latest.failed, latest.missing), (1, 0, 1));
+    let (next, guard) = start_run(&pool, Source::Rfc).await.unwrap();
+    assert_ne!(
+        next.id, run.id,
+        "a finished run with only dead links is not resumed"
+    );
+    guard.close().await.unwrap();
+
+    let mut tx = pool.begin().await.unwrap();
+    let day = Duration::from_secs(24 * 3600);
+    assert!(
+        crawls::recently_missing::execute(&mut tx, &page.url, day)
+            .await
+            .unwrap()
+    );
+    assert!(
+        !crawls::recently_missing::execute(&mut tx, &page.url, Duration::ZERO)
+            .await
+            .unwrap(),
+        "a zero window disables the memory"
+    );
+    assert!(
+        !crawls::recently_missing::execute(
+            &mut tx,
+            "https://rust-lang.github.io/rfcs/other.html",
+            day
+        )
+        .await
+        .unwrap()
+    );
+    tx.rollback().await.unwrap();
 }

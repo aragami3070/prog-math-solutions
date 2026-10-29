@@ -8,7 +8,7 @@ use url::Url;
 
 use super::discovery::normalize;
 use super::{
-    errors::{Blocked, Unavailable},
+    errors::{Blocked, Gone, Unavailable},
     persistence::Persistence,
     retry,
 };
@@ -157,6 +157,9 @@ impl<'a> Transport<'a> {
                     .ok_or_else(|| anyhow::anyhow!("redirect has no Location"))?;
                 current = current.join(location)?;
                 continue;
+            }
+            if matches!(response.status, 404 | 410) {
+                return Err(Gone(response.status).into());
             }
             ensure!(
                 response.status == 200,

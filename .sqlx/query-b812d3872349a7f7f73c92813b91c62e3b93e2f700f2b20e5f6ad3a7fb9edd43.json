@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        UPDATE crawl_runs\n        SET status = 'running', finished_at = NULL, error = NULL, failed = 0\n        WHERE id = $1\n        RETURNING id, source, status AS \"status: RunStatus\", requested, succeeded, failed,\n                  started_at, finished_at, error\n        ",
+  "query": "\n        UPDATE crawl_runs\n        SET status = 'running', finished_at = NULL, error = NULL, failed = 0\n        WHERE id = $1\n        RETURNING id, source, status AS \"status: RunStatus\", requested, succeeded, failed, missing,\n                  started_at, finished_at, error\n        ",
   "describe": {
     "columns": [
       {
@@ -35,16 +35,21 @@
       },
       {
         "ordinal": 6,
+        "name": "missing",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
         "name": "started_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "finished_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "error",
         "type_info": "Text"
       }
@@ -62,9 +67,10 @@
       false,
       false,
       false,
+      false,
       true,
       true
     ]
   },
-  "hash": "67b5e05ac6fa8b7e8172645fab0fe4d8f80dd450ed800a4d153948d264cced77"
+  "hash": "b812d3872349a7f7f73c92813b91c62e3b93e2f700f2b20e5f6ad3a7fb9edd43"
 }

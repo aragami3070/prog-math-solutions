@@ -32,6 +32,8 @@ export interface CrawlRun {
   requested: number;
   succeeded: number;
   failed: number;
+  /** Pages the source reports as not existing (404/410): skipped, not errors. */
+  missing: number;
   started_at: string;
   finished_at: string | null;
   error: string | null;

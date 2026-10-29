@@ -59,6 +59,8 @@ pub struct CrawlRun {
     pub requested: i32,
     pub succeeded: i32,
     pub failed: i32,
+    /// Pages the source reported as not existing (404/410); not retried, not errors.
+    pub missing: i32,
     pub started_at: DateTime<Utc>,
     pub finished_at: Option<DateTime<Utc>>,
     pub error: Option<String>,
