@@ -43,7 +43,7 @@ export function SearchPage() {
       <PageHeading
         eyebrow="ПОИСК ПО КОРПУСУ"
         title="Поиск"
-        lead="Слова, «фраза в кавычках» или номер: rfc:3058, RFC 3058. Пока только лексический поиск (BM25)."
+        lead="Слова, «фраза в кавычках» или номер: rfc:3058, RFC 3058. Лексический поиск (BM25) с необязательным исправлением опечаток и синонимами."
         onRefresh={() => void query.refetch()}
         refreshing={query.isFetching}
       />
@@ -68,6 +68,14 @@ export function SearchPage() {
           <input type="checkbox" checked={params.complete_only} onChange={event => void navigate({ search: { ...params, complete_only: event.target.checked, page: 1 } })} />{" "}
           Только полные
         </label>
+        <label>
+          <input type="checkbox" checked={params.fuzzy} onChange={event => void navigate({ search: { ...params, fuzzy: event.target.checked, page: 1 } })} />{" "}
+          Исправлять опечатки
+        </label>
+        <label>
+          <input type="checkbox" checked={params.synonyms} onChange={event => void navigate({ search: { ...params, synonyms: event.target.checked, page: 1 } })} />{" "}
+          Синонимы
+        </label>
       </form>
 
       {!searching ? (
@@ -82,8 +90,14 @@ export function SearchPage() {
               Индекс: {number(data.scope.indexed_documents)} документов
             </span>
           </div>
+          {(data.rewrite.corrections.length > 0 || data.rewrite.expansions.length > 0) && (
+            <p className="notice" role="status">
+              {data.rewrite.corrections.length > 0 && <>Исправлено: {data.rewrite.corrections.map(item => `${item.from} → ${item.to}`).join(", ")}. Исходные слова тоже учтены. </>}
+              {data.rewrite.expansions.length > 0 && <>Добавлены синонимы: {data.rewrite.expansions.map(item => `${item.from} ≈ ${item.to.join(" / ")}`).join("; ")}.</>}
+            </p>
+          )}
           {data.hits.length === 0 ? (
-            <div className="empty"><h2>Ничего не найдено</h2><p>Попробуйте другие слова или уберите фильтры. Опечатки и синонимы пока не обрабатываются.</p></div>
+            <div className="empty"><h2>Ничего не найдено</h2><p>Попробуйте другие слова, уберите фильтры или включите исправление опечаток и синонимы.</p></div>
           ) : (
             <div className="documents">
               {data.hits.map(hit => (

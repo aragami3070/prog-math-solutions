@@ -75,14 +75,24 @@ export interface SearchHit {
   snippet: SnippetPart[];
 }
 
+export interface SearchRewrite {
+  corrections: { from: string; to: string }[];
+  expansions: { from: string; to: string[] }[];
+  corrected_query: string | null;
+}
+
 export interface SearchResults {
   query: string;
+  rewrite: SearchRewrite;
   hits: SearchHit[];
   total: number;
   page: number;
   page_size: number;
   scope: {
     mode: string;
+    fuzzy: boolean;
+    synonyms: boolean;
+    synonyms_version: string;
     analyzer_version: string;
     generation: string;
     indexed_documents: number;

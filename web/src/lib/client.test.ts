@@ -42,7 +42,7 @@ it("reports an export error instead of saving it as a file", async () => {
 });
 
 it("builds a search path with only the filters that are set", () => {
-  const params = { q: "async fn", source: "" as const, complete_only: false, page: 2 };
+  const params = { q: "async fn", source: "" as const, complete_only: false, fuzzy: false, synonyms: false, page: 2 };
   const url = new URL(searchPath(params), "http://localhost");
   expect(Object.fromEntries(url.searchParams)).toEqual({ q: "async fn", page: "2", page_size: "20" });
   const filtered = new URL(searchPath({ ...params, source: "rfc", complete_only: true }), "http://localhost");
@@ -51,6 +51,7 @@ it("builds a search path with only the filters that are set", () => {
 });
 
 it("validates search parameters from the URL", () => {
-  expect(searchParams({ q: "x", source: "evil", complete_only: "true", page: "0" })).toEqual({ q: "x", source: "", complete_only: true, page: 1 });
+  expect(searchParams({ q: "x", source: "evil", complete_only: "true", page: "0" })).toEqual({ q: "x", source: "", complete_only: true, fuzzy: true, synonyms: true, page: 1 });
+  expect(searchParams({ q: "x", fuzzy: "false", synonyms: "false" })).toMatchObject({ fuzzy: false, synonyms: false });
   expect(searchParams({ q: "a".repeat(500) }).q).toHaveLength(200);
 });
