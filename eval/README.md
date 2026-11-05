@@ -27,6 +27,7 @@ eval pool --runs eval/runs/b0.tsv,eval/runs/group-peers.tsv
 # разметить новых кандидатов (labels.txt -> judgments.jsonl -> qrels.tsv), затем:
 eval qrels && eval score --variant b0
 eval compare --a b0 --b <вариант>             # paired bootstrap по группам запросов
+# режимы переписывания запроса задаются при запуске: eval run --variant b3-typo-syn --fuzzy on --synonyms on
 ```
 После каждого нового варианта (typo, синонимы, леммы, векторы) снова `eval pool` с его выдачей и доразметка
 только новых документов: сравнивать варианты можно, когда покрытие оценками@10 у обоих близко к 1.

@@ -1,4 +1,7 @@
-use super::{Error, SearchIndex};
+use super::{
+    Error, SearchIndex,
+    rewrite::{Options, REWRITE_BOOST, Rewrite},
+};
 use serde::Serialize;
 use tantivy::{
     TantivyDocument, Term,
@@ -47,6 +50,8 @@ pub struct Results {
     pub hits: Vec<Hit>,
     /// Every document matching the query and filters, not just the returned page.
     pub total: usize,
+    /// What the rewriting modes added to the query; empty when none applied.
+    pub rewrite: Rewrite,
 }
 
 impl SearchIndex {
@@ -54,13 +59,14 @@ impl SearchIndex {
         &self,
         text: &str,
         filters: &Filters,
+        options: Options,
         offset: usize,
         limit: usize,
     ) -> Result<Results, Error> {
         if offset + limit > MAX_DEPTH {
             return Err(Error::InvalidQuery("results are limited to the first 1000"));
         }
-        let query = self.build_query(text, filters)?;
+        let (query, rewrite) = self.build_query(text, filters, options)?;
         let searcher = self.reader.searcher();
         let (total, top) = searcher.search(
             &query,
@@ -96,10 +102,19 @@ impl SearchIndex {
                 snippet: parts(&snippet, &body),
             });
         }
-        Ok(Results { hits, total })
+        Ok(Results {
+            hits,
+            total,
+            rewrite,
+        })
     }
 
-    fn build_query(&self, text: &str, filters: &Filters) -> Result<Box<dyn Query>, Error> {
+    fn build_query(
+        &self,
+        text: &str,
+        filters: &Filters,
+        options: Options,
+    ) -> Result<(Box<dyn Query>, Rewrite), Error> {
         let text = text.trim();
         if text.is_empty() {
             return Err(Error::InvalidQuery("query must not be empty"));
@@ -128,6 +143,12 @@ impl SearchIndex {
             _ => (false, text),
         };
         let terms = self.tokens(inner, f.body)?;
+        // A quoted phrase is literal: rewriting it would change what the user asked for.
+        let rewrite = if phrase_only {
+            Rewrite::default()
+        } else {
+            self.rewrite(&terms, options)?
+        };
         if !phrase_only {
             for token in &terms {
                 for (field, boost) in [(f.title, TITLE_BOOST), (f.body, 1.0)] {
@@ -160,6 +181,39 @@ impl SearchIndex {
                 ));
             }
         }
+        for token in &rewrite.terms {
+            for (field, boost) in [(f.title, TITLE_BOOST), (f.body, 1.0)] {
+                let term = Term::from_field_text(field, token);
+                should.push((
+                    Occur::Should,
+                    boosted(
+                        TermQuery::new(term, IndexRecordOption::WithFreqs),
+                        boost * REWRITE_BOOST,
+                    ),
+                ));
+            }
+        }
+        for tokens in &rewrite.phrases {
+            for (field, boost) in [(f.title, TITLE_PHRASE_BOOST), (f.body, BODY_PHRASE_BOOST)] {
+                let query: Box<dyn Query> = if tokens.len() >= 2 {
+                    Box::new(PhraseQuery::new(
+                        tokens
+                            .iter()
+                            .map(|t| Term::from_field_text(field, t))
+                            .collect(),
+                    ))
+                } else {
+                    Box::new(TermQuery::new(
+                        Term::from_field_text(field, &tokens[0]),
+                        IndexRecordOption::WithFreqs,
+                    ))
+                };
+                should.push((
+                    Occur::Should,
+                    Box::new(BoostQuery::new(query, boost * REWRITE_BOOST)),
+                ));
+            }
+        }
         let mut must: Vec<(Occur, Box<dyn Query>)> =
             vec![(Occur::Must, Box::new(BooleanQuery::new(should)))];
         if let Some(source) = &filters.source {
@@ -168,11 +222,11 @@ impl SearchIndex {
         if filters.complete_only {
             must.push((Occur::Must, filter(f.completeness, "complete")));
         }
-        Ok(Box::new(BooleanQuery::new(must)))
+        Ok((Box::new(BooleanQuery::new(must)), rewrite))
     }
 
     /// The query text through the same analyzer the documents went through.
-    fn tokens(&self, text: &str, field: Field) -> Result<Vec<String>, Error> {
+    pub(super) fn tokens(&self, text: &str, field: Field) -> Result<Vec<String>, Error> {
         let mut analyzer = self.index.tokenizer_for_field(field)?;
         let mut stream = analyzer.token_stream(text);
         let mut tokens = Vec::new();

@@ -7,11 +7,13 @@
 mod analyzer;
 mod index;
 pub mod query;
+mod rewrite;
 mod title;
 
 pub use analyzer::{ANALYZER_NAME, ANALYZER_VERSION, analyzer};
 pub use index::{Builder, Error, IndexDocument, SearchHandle, SearchIndex};
 pub use query::{Filters, Hit, Results, SnippetPart, StoredDocument};
+pub use rewrite::{Correction, Expansion, Options, Rewrite, SYNONYMS_VERSION};
 pub use title::display_title;
 
 #[cfg(test)]

@@ -1,4 +1,7 @@
-use crate::{models::sources::Source, search::Hit};
+use crate::{
+    models::sources::Source,
+    search::{Hit, Rewrite},
+};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
@@ -11,6 +14,12 @@ pub struct SearchQuery {
     /// Only documents whose every page was collected.
     #[serde(default)]
     pub complete_only: bool,
+    /// Repair misspelled words against the corpus vocabulary (adds lower-weight branches).
+    #[serde(default)]
+    pub fuzzy: bool,
+    /// Expand abbreviations and aliases from the curated synonym table.
+    #[serde(default)]
+    pub synonyms: bool,
     #[serde(default = "first_page")]
     pub page: u32,
     #[serde(default = "default_page_size")]
@@ -28,8 +37,11 @@ fn default_page_size() -> u32 {
 /// What the numbers in a response refer to.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct SearchScope {
-    /// `lexical`: BM25 over title and body; no synonyms, typo repair, lemmas or vectors.
+    /// `lexical`: BM25 over title and body. `fuzzy` / `synonyms` say which rewriting modes ran.
     pub mode: &'static str,
+    pub fuzzy: bool,
+    pub synonyms: bool,
+    pub synonyms_version: &'static str,
     pub analyzer_version: &'static str,
     /// The index generation that answered; changes when the index is rebuilt.
     pub generation: String,
@@ -47,6 +59,8 @@ pub struct SearchResults {
     pub page: u32,
     pub page_size: u32,
     pub scope: SearchScope,
+    /// What the rewriting modes added: corrections and expansions. Never silent.
+    pub rewrite: Rewrite,
     pub took_ms: u64,
 }
 

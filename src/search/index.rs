@@ -1,9 +1,9 @@
-use super::{ANALYZER_NAME, ANALYZER_VERSION, analyzer};
+use super::{ANALYZER_NAME, ANALYZER_VERSION, analyzer, rewrite::Vocabulary};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::{Arc, RwLock},
+    sync::{Arc, OnceLock, RwLock},
     time::{SystemTime, UNIX_EPOCH},
 };
 use tantivy::{
@@ -90,6 +90,7 @@ pub struct SearchIndex {
     pub(super) fields: Fields,
     generation: String,
     documents: u64,
+    vocabulary: OnceLock<Vocabulary>,
 }
 
 impl SearchIndex {
@@ -123,7 +124,16 @@ impl SearchIndex {
             fields,
             generation,
             documents,
+            vocabulary: OnceLock::new(),
         })
+    }
+
+    pub(super) fn vocabulary(&self) -> Result<&Vocabulary, Error> {
+        if let Some(vocabulary) = self.vocabulary.get() {
+            return Ok(vocabulary);
+        }
+        let read = Vocabulary::read(self, self.fields.body)?;
+        Ok(self.vocabulary.get_or_init(|| read))
     }
 
     pub fn generation(&self) -> &str {

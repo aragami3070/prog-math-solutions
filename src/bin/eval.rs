@@ -14,7 +14,7 @@ use rust_knowledge::{
         Query, QueryMetrics, Summary, bootstrap_diff, evaluate_query, group_runs, read_qrels,
         read_queries, read_run, summarize,
     },
-    search::{ANALYZER_VERSION, Filters, SearchHandle},
+    search::{ANALYZER_VERSION, Filters, Options, SYNONYMS_VERSION, SearchHandle},
     use_cases::search::rebuild,
 };
 use serde_json::{Value, json};
@@ -120,6 +120,10 @@ async fn run(options: &HashMap<String, String>) -> Result<()> {
         .context("no index: run `eval rebuild` first")?;
     let pool = pool_connection().await?;
     let (corpus_sha256, documents) = corpus_fingerprint(&pool).await?;
+    let rewriting = Options {
+        fuzzy: options.get("fuzzy").is_some_and(|v| v == "on"),
+        synonyms: options.get("synonyms").is_some_and(|v| v == "on"),
+    };
     let mut lines = String::new();
     let mut empty = 0;
     for query in &queries {
@@ -127,9 +131,31 @@ async fn run(options: &HashMap<String, String>) -> Result<()> {
             source: query.filters.source.clone(),
             complete_only: query.filters.complete_only,
         };
-        let found = index.search(&query.text, &filters, 0, DEPTH);
+        let found = index.search(&query.text, &filters, rewriting, 0, DEPTH);
         let hits = match found {
-            Ok(found) => found.hits,
+            Ok(found) => {
+                if !found.rewrite.is_empty() {
+                    eprintln!(
+                        "{} {:?}: {} -> {:?}",
+                        query.query_id,
+                        query.text,
+                        found
+                            .rewrite
+                            .corrections
+                            .iter()
+                            .map(|c| format!("{}>{}", c.from, c.to))
+                            .collect::<Vec<_>>()
+                            .join(","),
+                        found
+                            .rewrite
+                            .expansions
+                            .iter()
+                            .map(|e| e.from.as_str())
+                            .collect::<Vec<_>>()
+                    );
+                }
+                found.hits
+            }
             // A query the engine rejects (no searchable terms) is an empty answer.
             Err(rust_knowledge::search::Error::InvalidQuery(_)) => Vec::new(),
             Err(error) => return Err(error.into()),
@@ -154,6 +180,9 @@ async fn run(options: &HashMap<String, String>) -> Result<()> {
     );
     let meta = json!({
         "variant": variant,
+        "fuzzy": rewriting.fuzzy,
+        "synonyms": rewriting.synonyms,
+        "synonyms_version": SYNONYMS_VERSION,
         "analyzer_version": ANALYZER_VERSION,
         "index_generation": index.generation(),
         "indexed_documents": index.documents(),

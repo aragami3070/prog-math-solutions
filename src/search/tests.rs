@@ -74,7 +74,7 @@ fn build(handle: &SearchHandle, docs: Vec<IndexDocument>) -> std::sync::Arc<Sear
 
 fn ids(index: &SearchIndex, query: &str) -> Vec<String> {
     index
-        .search(query, &Filters::default(), 0, 10)
+        .search(query, &Filters::default(), Options::default(), 0, 10)
         .unwrap()
         .hits
         .into_iter()
@@ -121,25 +121,35 @@ fn phrases_use_positions_not_just_word_presence() {
 #[test]
 fn filters_narrow_matches_and_total_counts_all_of_them() {
     let (_dir, _handle, index) = fixture();
-    let all = index.search("async", &Filters::default(), 0, 1).unwrap();
+    let all = index
+        .search("async", &Filters::default(), Options::default(), 0, 1)
+        .unwrap();
     assert_eq!(all.total, 3);
     assert_eq!(all.hits.len(), 1);
     let internals = Filters {
         source: Some("internals".into()),
         complete_only: false,
     };
-    let hits = index.search("async", &internals, 0, 10).unwrap();
+    let hits = index
+        .search("async", &internals, Options::default(), 0, 10)
+        .unwrap();
     assert!(hits.hits.iter().all(|hit| hit.source == "internals"));
     assert_eq!(hits.total, 2);
     let complete = Filters {
         source: None,
         complete_only: true,
     };
-    let hits = index.search("async", &complete, 0, 10).unwrap();
+    let hits = index
+        .search("async", &complete, Options::default(), 0, 10)
+        .unwrap();
     assert!(hits.hits.iter().all(|hit| hit.completeness == "complete"));
     // Pages do not repeat documents.
-    let first = index.search("async", &Filters::default(), 0, 2).unwrap();
-    let second = index.search("async", &Filters::default(), 2, 2).unwrap();
+    let first = index
+        .search("async", &Filters::default(), Options::default(), 0, 2)
+        .unwrap();
+    let second = index
+        .search("async", &Filters::default(), Options::default(), 2, 2)
+        .unwrap();
     assert!(
         first
             .hits
@@ -152,7 +162,13 @@ fn filters_narrow_matches_and_total_counts_all_of_them() {
 fn snippets_are_plain_text_with_matched_parts() {
     let (_dir, _handle, index) = fixture();
     let hit = &index
-        .search("FromResidual", &Filters::default(), 0, 1)
+        .search(
+            "FromResidual",
+            &Filters::default(),
+            Options::default(),
+            0,
+            1,
+        )
         .unwrap()
         .hits[0];
     let matched: Vec<&str> = hit
@@ -166,7 +182,7 @@ fn snippets_are_plain_text_with_matched_parts() {
     assert!(text.contains("The Try trait"));
     // A title-only match still shows the start of the text.
     let hit = &index
-        .search("rfc:3058", &Filters::default(), 0, 1)
+        .search("rfc:3058", &Filters::default(), Options::default(), 0, 1)
         .unwrap()
         .hits[0];
     assert!(!hit.snippet.is_empty());
@@ -178,14 +194,14 @@ fn bad_queries_are_rejected() {
     for query in ["", "   ", "\"\"", &"a".repeat(201)] {
         assert!(
             matches!(
-                index.search(query, &Filters::default(), 0, 10),
+                index.search(query, &Filters::default(), Options::default(), 0, 10),
                 Err(Error::InvalidQuery(_))
             ),
             "{query:?}"
         );
     }
     assert!(matches!(
-        index.search("async", &Filters::default(), 995, 10),
+        index.search("async", &Filters::default(), Options::default(), 995, 10),
         Err(Error::InvalidQuery(_))
     ));
 }
@@ -291,4 +307,91 @@ fn an_index_from_another_analyzer_is_not_opened() {
     std::fs::write(&manifest, text).unwrap();
     drop(handle);
     assert!(SearchHandle::open(dir.path()).current().is_none());
+}
+
+fn search_with(index: &SearchIndex, query: &str, options: Options) -> Results {
+    index
+        .search(query, &Filters::default(), options, 0, 10)
+        .unwrap()
+}
+
+#[test]
+fn a_typo_finds_nothing_unless_repair_is_on_and_the_repair_is_reported() {
+    let (_dir, _handle, index) = fixture();
+    assert!(
+        search_with(&index, "asynx", Options::default())
+            .hits
+            .is_empty()
+    );
+    let found = search_with(
+        &index,
+        "asynx",
+        Options {
+            fuzzy: true,
+            synonyms: false,
+        },
+    );
+    assert!(!found.hits.is_empty());
+    assert_eq!(
+        found.rewrite.corrections,
+        [Correction {
+            from: "asynx".into(),
+            to: "async".into()
+        }]
+    );
+    assert_eq!(found.rewrite.corrected_query.as_deref(), Some("async"));
+}
+
+#[test]
+fn a_known_word_is_not_treated_as_a_typo() {
+    let (_dir, _handle, index) = fixture();
+    let found = search_with(
+        &index,
+        "async",
+        Options {
+            fuzzy: true,
+            synonyms: true,
+        },
+    );
+    assert!(found.rewrite.corrections.is_empty());
+}
+
+#[test]
+fn quoted_phrases_are_never_rewritten() {
+    let (_dir, _handle, index) = fixture();
+    let found = search_with(
+        &index,
+        "\"asynx\"",
+        Options {
+            fuzzy: true,
+            synonyms: true,
+        },
+    );
+    assert!(found.rewrite.is_empty());
+    assert!(found.hits.is_empty());
+}
+
+#[test]
+fn synonyms_expand_the_query_and_say_so() {
+    let (_dir, _handle, index) = fixture();
+    assert!(
+        search_with(&index, "gats", Options::default())
+            .hits
+            .is_empty()
+    );
+    let found = search_with(
+        &index,
+        "gats",
+        Options {
+            fuzzy: false,
+            synonyms: true,
+        },
+    );
+    assert_eq!(found.hits[0].document_id, "internals:200");
+    assert_eq!(found.rewrite.expansions[0].from, "gats");
+    assert!(
+        found.rewrite.expansions[0]
+            .to
+            .contains(&"generic associated types".to_owned())
+    );
 }
