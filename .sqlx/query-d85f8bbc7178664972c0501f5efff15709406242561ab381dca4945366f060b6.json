@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT source_id, target_id, occurrences, evidence\n        FROM edges\n        WHERE kind = 'references' AND (source_id = $1 OR target_id = $1)\n        ORDER BY occurrences DESC, id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "target_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "occurrences",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "evidence",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d85f8bbc7178664972c0501f5efff15709406242561ab381dca4945366f060b6"
+}

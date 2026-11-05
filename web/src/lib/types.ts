@@ -113,3 +113,32 @@ export interface RebuildResult {
   documents: number;
   took_ms: number;
 }
+
+export interface GraphNode {
+  id: string;
+  db_id: number;
+  source: SourceId;
+  title: string;
+  url: string;
+  completeness: Completeness;
+  role: "center" | "references" | "referenced_by" | "both";
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  kind: string;
+  occurrences: number;
+  evidence: { post_id: number; url: string; anchor_text: string | null }[];
+}
+
+export interface Graph {
+  center: GraphNode;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  edge_types: string[];
+  built_at: string | null;
+  truncated: boolean;
+  total_edges: number;
+  limits: { nodes: number };
+}

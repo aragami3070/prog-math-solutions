@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO edges (source_id, target_id, kind, occurrences, evidence)\n        SELECT\n            l.document_id, t.id, 'references', COUNT(*)::INTEGER,\n            to_jsonb((array_agg(\n                jsonb_build_object('post_id', l.post_id, 'url', l.target_url, 'anchor_text', l.anchor_text)\n                ORDER BY l.post_id, l.id\n            ))[1:10])\n        FROM links AS l\n        JOIN documents AS t ON (t.source || ':' || t.native_id) = COALESCE(\n            (SELECT 'internals:' || m[1] FROM regexp_match(\n                l.target_url,\n                '^https://internals\\.rust-lang\\.org/t/(?:[^/#?]*[^0-9/#?][^/#?]*/)?([0-9]+)') AS m),\n            (SELECT 'rfc:' || ltrim(m[1], '0') FROM regexp_match(\n                l.target_url, '^https://rust-lang\\.github\\.io/rfcs/([0-9]{4})-[^/#?]*\\.html') AS m),\n            (SELECT 'rfc:' || ltrim(m[1], '0') FROM regexp_match(\n                l.target_url, '^https://github\\.com/rust-lang/rfcs/blob/[^/]+/text/([0-9]{4})-') AS m)\n        )\n        WHERE t.id <> l.document_id\n        GROUP BY l.document_id, t.id\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "95e25d648a85b1b9f723f536eecbe0f9a630ff6f8add3464f73919be21c7b078"
+}

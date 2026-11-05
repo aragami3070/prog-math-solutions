@@ -1,5 +1,6 @@
 pub mod crawls;
 pub mod errors;
+pub mod graph;
 pub mod health;
 pub mod search;
 pub mod sources;
@@ -11,6 +12,7 @@ use crate::{
     models::{
         crawls::{CrawlRequest, CrawlRun, RunStatus},
         exports::ExportFormat,
+        graph::{Evidence, Graph, GraphEdge, GraphLimits, GraphNode, GraphRebuild},
         search::{RebuildResult, SearchResults, SearchScope},
         sources::{Completeness, DocumentPage, DocumentSummary, Source},
         statistics::{SourceStats, Statistics},
@@ -68,7 +70,9 @@ impl AppState {
         crawls::start,
         sources::resume,
         search::search,
-        search::rebuild
+        search::rebuild,
+        graph::neighbors,
+        graph::rebuild
     ),
     components(schemas(
         Source,
@@ -83,6 +87,12 @@ impl AppState {
         Statistics,
         SearchResults,
         SearchScope,
+        Graph,
+        GraphNode,
+        GraphEdge,
+        GraphLimits,
+        GraphRebuild,
+        Evidence,
         Mode,
         RebuildResult,
         Hit,
@@ -97,6 +107,7 @@ pub fn router(state: AppState, web_dist: &std::path::Path) -> Router {
         .merge(health::router())
         .merge(sources::router())
         .merge(search::router())
+        .merge(graph::router())
         .merge(crawls::router())
         .merge(statistics::router())
         .fallback(|| async {

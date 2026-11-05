@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM edges WHERE kind = 'references'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "0013a7b59f54c9d5db363c2f9dbb4619d1ccd432f9043140ae8cf69b048115dd"
+}

@@ -96,3 +96,16 @@ impl From<use_cases::search::errors::Error> for Error {
         }
     }
 }
+
+impl From<use_cases::graph::errors::Error> for Error {
+    fn from(error: use_cases::graph::errors::Error) -> Self {
+        use use_cases::graph::errors::Error as GraphError;
+        match error {
+            GraphError::InvalidDocument | GraphError::InvalidLimit => {
+                Self(StatusCode::BAD_REQUEST, error.to_string())
+            }
+            GraphError::NotFound => Self(StatusCode::NOT_FOUND, error.to_string()),
+            GraphError::Repository(error) => Self::database(error),
+        }
+    }
+}
