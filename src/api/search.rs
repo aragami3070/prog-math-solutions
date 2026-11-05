@@ -37,7 +37,9 @@ pub async fn search(
 ) -> Result<Json<SearchResults>, Error> {
     let Query(query) =
         query.map_err(|_| Error(StatusCode::BAD_REQUEST, "Invalid search parameters".into()))?;
-    Ok(Json(search::query::execute(&state.search, query).await?))
+    Ok(Json(
+        search::query::execute(&state.search, &state.semantic, query).await?,
+    ))
 }
 
 /// Rebuilds the search index from the database. Reads only the database, never the sources.

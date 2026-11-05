@@ -20,6 +20,7 @@ const MIN_LEN: usize = 5;
 pub struct Options {
     pub fuzzy: bool,
     pub synonyms: bool,
+    pub lemmas: bool,
 }
 
 #[derive(Debug, Serialize, ToSchema, Clone, PartialEq, Eq)]
@@ -34,11 +35,21 @@ pub struct Expansion {
     pub to: Vec<String>,
 }
 
+/// Another form of a query word: `objects` for `object`, found through their shared lemma.
+#[derive(Debug, Serialize, ToSchema, Clone, PartialEq, Eq)]
+pub struct WordForms {
+    pub from: String,
+    pub to: Vec<String>,
+}
+
 /// What was added to the query, in terms the user can read.
 #[derive(Debug, Default, Serialize, ToSchema, Clone)]
 pub struct Rewrite {
     pub corrections: Vec<Correction>,
     pub expansions: Vec<Expansion>,
+    pub word_forms: Vec<WordForms>,
+    /// Modes asked for that could not run (the answer is then the plain lexical one).
+    pub unavailable: Vec<String>,
     /// The query with corrections applied, when there were any.
     pub corrected_query: Option<String>,
     /// Token sequences to search as extra phrases; internal to query building.
@@ -51,7 +62,7 @@ pub struct Rewrite {
 
 impl Rewrite {
     pub fn is_empty(&self) -> bool {
-        self.corrections.is_empty() && self.expansions.is_empty()
+        self.corrections.is_empty() && self.expansions.is_empty() && self.word_forms.is_empty()
     }
 }
 
@@ -83,6 +94,91 @@ const SYNONYMS: &[&[&str]] = &[
     &["pattern matching", "match expressions"],
     &["proc macro", "procedural macros", "proc-macro"],
 ];
+
+/// Surface form -> lemma, built offline by `tools/lemmas/build.py` (spaCy, in context).
+pub struct Lemmas {
+    pub version: String,
+    pub sha256: String,
+    forms: HashMap<String, String>,
+    by_lemma: HashMap<String, Vec<String>>,
+}
+
+#[derive(serde::Deserialize)]
+struct LemmaFile {
+    version: String,
+    #[serde(default)]
+    sha256: String,
+    forms: HashMap<String, LemmaEntry>,
+}
+
+#[derive(serde::Deserialize)]
+struct LemmaEntry {
+    lemma: String,
+}
+
+impl Lemmas {
+    pub fn parse(json: &[u8]) -> Result<Self, serde_json::Error> {
+        let file: LemmaFile = serde_json::from_slice(json)?;
+        let forms: HashMap<String, String> = file
+            .forms
+            .into_iter()
+            .map(|(form, entry)| (form, entry.lemma))
+            .collect();
+        let mut by_lemma: HashMap<String, Vec<String>> = HashMap::new();
+        for (form, lemma) in &forms {
+            by_lemma
+                .entry(lemma.clone())
+                .or_default()
+                .push(form.clone());
+        }
+        Ok(Self {
+            version: file.version,
+            sha256: file.sha256,
+            forms,
+            by_lemma,
+        })
+    }
+
+    /// The table named by `LEMMA_FILE` (default `data/lemmas.json`), loaded once.
+    /// `None` when the file is missing or unreadable: the lemma mode is then unavailable.
+    pub fn shared() -> Option<&'static Lemmas> {
+        static SHARED: std::sync::OnceLock<Option<Lemmas>> = std::sync::OnceLock::new();
+        SHARED
+            .get_or_init(|| {
+                let path =
+                    std::env::var("LEMMA_FILE").unwrap_or_else(|_| "data/lemmas.json".into());
+                let bytes = std::fs::read(&path).ok()?;
+                match Self::parse(&bytes) {
+                    Ok(lemmas) => Some(lemmas),
+                    Err(error) => {
+                        tracing::warn!(%error, path, "lemma table is unusable");
+                        None
+                    }
+                }
+            })
+            .as_ref()
+    }
+
+    /// Other forms of the same lemma, most common in the corpus first.
+    fn related(&self, token: &str, vocabulary: &Vocabulary) -> Vec<String> {
+        let lemma = self.forms.get(token).map(String::as_str).unwrap_or(token);
+        let mut forms: Vec<String> = self
+            .by_lemma
+            .get(lemma)
+            .into_iter()
+            .flatten()
+            .cloned()
+            .chain(std::iter::once(lemma.to_owned()))
+            .filter(|form| form != token)
+            .collect();
+        forms.sort();
+        forms.dedup();
+        forms.retain(|form| vocabulary.df(form) > 0);
+        forms.sort_by_key(|form| std::cmp::Reverse(vocabulary.df(form)));
+        forms.truncate(MAX_VARIANTS);
+        forms
+    }
+}
 
 /// Terms of the body field with the number of documents containing each.
 pub struct Vocabulary {
@@ -182,7 +278,12 @@ pub fn edit_distance(a: &str, b: &str, max: usize) -> Option<usize> {
 }
 
 impl SearchIndex {
-    pub(super) fn rewrite(&self, tokens: &[String], options: Options) -> Result<Rewrite, Error> {
+    pub(super) fn rewrite(
+        &self,
+        tokens: &[String],
+        options: Options,
+        lemmas: Option<&Lemmas>,
+    ) -> Result<Rewrite, Error> {
         let mut rewrite = Rewrite::default();
         let mut effective = tokens.to_vec();
         if options.fuzzy {
@@ -206,6 +307,24 @@ impl SearchIndex {
                     rewrite.phrases.push(effective.clone());
                 }
                 rewrite.corrected_query = Some(effective.join(" "));
+            }
+        }
+        if options.lemmas {
+            match lemmas {
+                None => rewrite.unavailable.push("lemmas".to_owned()),
+                Some(lemmas) => {
+                    let vocabulary = self.vocabulary()?;
+                    for token in tokens {
+                        let related = lemmas.related(token, vocabulary);
+                        if !related.is_empty() {
+                            rewrite.terms.extend(related.iter().cloned());
+                            rewrite.word_forms.push(WordForms {
+                                from: token.clone(),
+                                to: related,
+                            });
+                        }
+                    }
+                }
             }
         }
         if options.synonyms {

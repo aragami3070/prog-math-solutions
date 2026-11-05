@@ -1,0 +1,359 @@
+//! Semantic and hybrid retrieval: chunk vectors in Qdrant, query vectors from the local
+//! embedding worker (`tools/nlp/worker.py`), fused with the lexical ranking by RRF.
+//!
+//! Both services are optional. When either is down the answer is the plain lexical one and
+//! says so (`degraded`): a search page that fails because a model server is off is worse
+//! than one that says "vectors unavailable".
+
+use super::{Error, Filters, Hit, Options, Rewrite, SearchIndex, SnippetPart};
+use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, sync::Arc, time::Duration};
+use utoipa::ToSchema;
+
+const COLLECTION: &str = "rks_chunks_v1";
+/// Candidates taken from each ranking before fusion; hybrid pages are cut from this pool.
+pub const POOL: usize = 100;
+/// Chunks fetched to find `POOL` distinct documents (several chunks of one document collapse).
+const CHUNK_LIMIT: usize = 300;
+/// Standard RRF damping constant.
+const RRF_K: f32 = 60.0;
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum Mode {
+    #[default]
+    Lexical,
+    Vector,
+    Hybrid,
+}
+
+impl Mode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Lexical => "lexical",
+            Self::Vector => "vector",
+            Self::Hybrid => "hybrid",
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct Semantic {
+    http: reqwest::Client,
+    qdrant: String,
+    embed: String,
+}
+
+/// The best chunk of a document and how close it is to the query.
+pub struct DocumentMatch {
+    pub db_id: i64,
+    pub document_id: String,
+    pub score: f32,
+    pub chunk: String,
+}
+
+#[derive(Deserialize)]
+struct Embedded {
+    vectors: Vec<Vec<f32>>,
+}
+
+#[derive(Deserialize)]
+struct Found {
+    result: Vec<Point>,
+}
+
+#[derive(Deserialize)]
+struct Point {
+    score: f32,
+    payload: Payload,
+}
+
+#[derive(Deserialize)]
+struct Payload {
+    db_id: i64,
+    doc_id: String,
+    text: String,
+}
+
+impl Semantic {
+    pub fn new(qdrant: &str, embed: &str) -> Self {
+        Self {
+            http: reqwest::Client::builder()
+                .timeout(Duration::from_secs(15))
+                .build()
+                .expect("a plain HTTP client builds"),
+            qdrant: qdrant.trim_end_matches('/').to_owned(),
+            embed: embed.trim_end_matches('/').to_owned(),
+        }
+    }
+
+    /// `QDRANT_URL` (default `http://127.0.0.1:6333`) and `EMBED_URL` (default
+    /// `http://127.0.0.1:8090`), both loopback services.
+    pub fn from_env() -> Self {
+        let url = |name: &str, default: &str| {
+            std::env::var(name)
+                .unwrap_or_else(|_| default.to_owned())
+                .trim_end_matches('/')
+                .to_owned()
+        };
+        Self::new(
+            &url("QDRANT_URL", "http://127.0.0.1:6333"),
+            &url("EMBED_URL", "http://127.0.0.1:8090"),
+        )
+    }
+
+    async fn embed_query(&self, text: &str) -> Result<Vec<f32>, String> {
+        let response = self
+            .http
+            .post(format!("{}/embed", self.embed))
+            .json(&serde_json::json!({"texts": [text], "kind": "query"}))
+            .send()
+            .await
+            .and_then(|r| r.error_for_status())
+            .map_err(|e| format!("embedding worker unavailable ({e})"))?;
+        let embedded: Embedded = response
+            .json()
+            .await
+            .map_err(|e| format!("embedding worker answered badly ({e})"))?;
+        embedded
+            .vectors
+            .into_iter()
+            .next()
+            .ok_or_else(|| "embedding worker returned no vector".to_owned())
+    }
+
+    /// Nearest documents to the query, one entry per document (its best chunk). Filters are the
+    /// ones the lexical side uses, applied inside Qdrant.
+    pub async fn nearest(
+        &self,
+        text: &str,
+        filters: &Filters,
+    ) -> Result<Vec<DocumentMatch>, String> {
+        let vector = self.embed_query(text).await?;
+        let mut must = Vec::new();
+        if let Some(source) = &filters.source {
+            must.push(serde_json::json!({"key": "source", "match": {"value": source}}));
+        }
+        if filters.complete_only {
+            must.push(serde_json::json!({"key": "completeness", "match": {"value": "complete"}}));
+        }
+        let response = self
+            .http
+            .post(format!(
+                "{}/collections/{COLLECTION}/points/search",
+                self.qdrant
+            ))
+            .json(&serde_json::json!({
+                "vector": vector,
+                "limit": CHUNK_LIMIT,
+                "with_payload": true,
+                "filter": {"must": must},
+            }))
+            .send()
+            .await
+            .and_then(|r| r.error_for_status())
+            .map_err(|e| format!("vector store unavailable ({e})"))?;
+        let found: Found = response
+            .json()
+            .await
+            .map_err(|e| format!("vector store answered badly ({e})"))?;
+        // Points come best first, so the first chunk seen for a document is its best.
+        let mut seen = HashMap::new();
+        let mut documents = Vec::new();
+        for point in found.result {
+            if seen.insert(point.payload.doc_id.clone(), ()).is_none() {
+                documents.push(DocumentMatch {
+                    db_id: point.payload.db_id,
+                    document_id: point.payload.doc_id,
+                    score: point.score,
+                    chunk: point.payload.text,
+                });
+                if documents.len() == POOL {
+                    break;
+                }
+            }
+        }
+        Ok(documents)
+    }
+}
+
+pub struct Answer {
+    pub hits: Vec<Hit>,
+    pub total: usize,
+    /// `total` counts the candidate pool (vector and hybrid), not every matching document.
+    pub total_is_pool: bool,
+    pub rewrite: Rewrite,
+    /// The mode that actually produced the hits.
+    pub mode: Mode,
+    pub degraded: Option<String>,
+}
+
+/// Reciprocal rank fusion: documents ranked well by either list rise, those ranked by both
+/// rise most. Scores of the two rankings are not comparable, so only ranks are used.
+fn fuse(lists: &[Vec<String>]) -> Vec<(String, f32)> {
+    let mut score: HashMap<&str, f32> = HashMap::new();
+    for list in lists {
+        for (rank, id) in list.iter().enumerate() {
+            *score.entry(id).or_default() += 1.0 / (RRF_K + rank as f32 + 1.0);
+        }
+    }
+    let mut fused: Vec<(String, f32)> = score.into_iter().map(|(k, v)| (k.to_owned(), v)).collect();
+    // Ties (equal fused score) fall back to the id so the order is deterministic.
+    fused.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    fused
+}
+
+/// One search: what to look for, how, and which slice of the ranking to return.
+pub struct Request {
+    pub text: String,
+    pub filters: Filters,
+    pub options: Options,
+    pub mode: Mode,
+    pub offset: usize,
+    pub limit: usize,
+}
+
+pub async fn answer(
+    semantic: &Semantic,
+    index: Arc<SearchIndex>,
+    request: Request,
+) -> Result<Answer, Error> {
+    let Request {
+        text,
+        filters,
+        options,
+        mode,
+        offset,
+        limit,
+    } = request;
+    let lexical = |index: Arc<SearchIndex>, text: String, filters: Filters, offset, limit| async move {
+        tokio::task::spawn_blocking(move || index.search(&text, &filters, options, offset, limit))
+            .await?
+    };
+    if mode == Mode::Lexical {
+        let found = lexical(index, text, filters, offset, limit).await?;
+        return Ok(Answer {
+            hits: found.hits,
+            total: found.total,
+            total_is_pool: false,
+            rewrite: found.rewrite,
+            mode,
+            degraded: None,
+        });
+    }
+    if offset + limit > POOL {
+        return Err(Error::InvalidQuery(
+            "vector and hybrid results are limited to the first 100",
+        ));
+    }
+    let nearest = match semantic.nearest(&text, &filters).await {
+        Ok(nearest) => nearest,
+        Err(reason) => {
+            // Degrade, never fail: the lexical ranking still answers.
+            let found = lexical(index, text, filters, offset, limit).await?;
+            return Ok(Answer {
+                hits: found.hits,
+                total: found.total,
+                total_is_pool: false,
+                rewrite: found.rewrite,
+                mode: Mode::Lexical,
+                degraded: Some(reason),
+            });
+        }
+    };
+    let chunks: HashMap<String, (i64, String)> = nearest
+        .iter()
+        .map(|m| (m.document_id.clone(), (m.db_id, m.chunk.clone())))
+        .collect();
+    let vector_order: Vec<String> = nearest.iter().map(|m| m.document_id.clone()).collect();
+
+    let (mut lexical_hits, rewrite, order) = if mode == Mode::Hybrid {
+        let found = lexical(index.clone(), text, filters, 0, POOL).await;
+        // A query the lexical side rejects (no searchable terms) still has a vector answer.
+        let (hits, rewrite) = match found {
+            Ok(found) => (found.hits, found.rewrite),
+            Err(Error::InvalidQuery(_)) => (Vec::new(), Rewrite::default()),
+            Err(error) => return Err(error),
+        };
+        let lexical_order: Vec<String> = hits.iter().map(|h| h.document_id.clone()).collect();
+        let fused = fuse(&[lexical_order, vector_order]);
+        (hits, rewrite, fused)
+    } else {
+        let order = vector_order
+            .iter()
+            .zip(&nearest)
+            .map(|(id, m)| (id.clone(), m.score))
+            .collect();
+        (Vec::new(), Rewrite::default(), order)
+    };
+
+    let total = order.len();
+    let page: Vec<(String, f32)> = order.into_iter().skip(offset).take(limit).collect();
+    let mut by_id: HashMap<String, Hit> = lexical_hits
+        .drain(..)
+        .map(|hit| (hit.document_id.clone(), hit))
+        .collect();
+    let mut hits = Vec::with_capacity(page.len());
+    for (document_id, score) in page {
+        let mut hit = match by_id.remove(&document_id) {
+            Some(hit) => hit,
+            None => {
+                let (db_id, chunk) = chunks.get(&document_id).cloned().unwrap_or_default();
+                let index = index.clone();
+                let id = document_id.clone();
+                // The vector store only knows the chunk; the rest comes from the lexical index.
+                let stored = tokio::task::spawn_blocking(move || index.document(&id)).await??;
+                let Some(stored) = stored else {
+                    continue; // deleted since the vectors were built
+                };
+                Hit {
+                    id: db_id,
+                    document_id: stored.document_id,
+                    source: stored.source,
+                    title: stored.title,
+                    url: stored.url,
+                    completeness: stored.completeness,
+                    score,
+                    snippet: vec![SnippetPart {
+                        text: chunk,
+                        matched: false,
+                    }],
+                }
+            }
+        };
+        hit.score = score;
+        hits.push(hit);
+    }
+    Ok(Answer {
+        hits,
+        total,
+        total_is_pool: true,
+        rewrite,
+        mode,
+        degraded: None,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ids(items: &[(String, f32)]) -> Vec<&str> {
+        items.iter().map(|(id, _)| id.as_str()).collect()
+    }
+
+    #[test]
+    fn a_document_found_by_both_rankings_rises_above_one_found_by_one() {
+        let lexical = vec!["a".to_owned(), "b".to_owned(), "c".to_owned()];
+        let vector = vec!["c".to_owned(), "d".to_owned(), "b".to_owned()];
+        let fused = fuse(&[lexical, vector]);
+        // b and c are in both lists; c is first in one, third in the other, b second and third.
+        assert_eq!(ids(&fused), ["c", "b", "a", "d"]);
+    }
+
+    #[test]
+    fn fusion_order_is_deterministic_on_ties() {
+        let fused = fuse(&[vec!["x".to_owned()], vec!["y".to_owned()]]);
+        assert_eq!(ids(&fused), ["x", "y"]);
+    }
+}

@@ -1,6 +1,6 @@
 use crate::{
     models::sources::Source,
-    search::{Hit, Rewrite},
+    search::{Hit, Rewrite, semantic::Mode},
 };
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
@@ -14,12 +14,19 @@ pub struct SearchQuery {
     /// Only documents whose every page was collected.
     #[serde(default)]
     pub complete_only: bool,
+    /// `lexical` (default), `vector` (embeddings in Qdrant) or `hybrid` (both, fused by RRF).
+    /// If the vector side is down the answer is lexical and `scope.degraded` says why.
+    #[serde(default)]
+    pub mode: Mode,
     /// Repair misspelled words against the corpus vocabulary (adds lower-weight branches).
     #[serde(default)]
     pub fuzzy: bool,
     /// Expand abbreviations and aliases from the curated synonym table.
     #[serde(default)]
     pub synonyms: bool,
+    /// Also match other forms of a word (`objects` for `object`) via the lemma table.
+    #[serde(default)]
+    pub lemmas: bool,
     #[serde(default = "first_page")]
     pub page: u32,
     #[serde(default = "default_page_size")]
@@ -39,9 +46,19 @@ fn default_page_size() -> u32 {
 pub struct SearchScope {
     /// `lexical`: BM25 over title and body. `fuzzy` / `synonyms` say which rewriting modes ran.
     pub mode: &'static str,
+    /// The mode asked for; differs from `mode` when the answer degraded.
+    pub requested_mode: &'static str,
+    /// Why the answer is not what was asked for (vector store or embedding worker down).
+    pub degraded: Option<String>,
+    /// `total` counts every matching document (lexical) or only the candidate pool (vector,
+    /// hybrid: at most 100).
+    pub total_is_pool: bool,
     pub fuzzy: bool,
     pub synonyms: bool,
     pub synonyms_version: &'static str,
+    pub lemmas: bool,
+    /// Version of the lemma table when one is loaded; `null` when the mode cannot run.
+    pub lemmas_version: Option<String>,
     pub analyzer_version: &'static str,
     /// The index generation that answered; changes when the index is rebuilt.
     pub generation: String,

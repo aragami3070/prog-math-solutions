@@ -27,6 +27,8 @@ pub enum Error {
     Tantivy(#[from] tantivy::TantivyError),
     #[error("search index files error")]
     Io(#[from] std::io::Error),
+    #[error("search task failed")]
+    Task(#[from] tokio::task::JoinError),
     #[error("search index manifest error")]
     Json(#[from] serde_json::Error),
     #[error("index was built with analyzer {found}, this build uses {ANALYZER_VERSION}")]

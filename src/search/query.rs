@@ -147,7 +147,7 @@ impl SearchIndex {
         let rewrite = if phrase_only {
             Rewrite::default()
         } else {
-            self.rewrite(&terms, options)?
+            self.rewrite(&terms, options, super::rewrite::Lemmas::shared())?
         };
         if !phrase_only {
             for token in &terms {

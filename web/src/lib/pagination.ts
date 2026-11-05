@@ -7,10 +7,14 @@ export function pagination(search: Record<string, unknown>) {
   return {
     fuzzy: !(search.fuzzy === false || search.fuzzy === "false"),
     synonyms: !(search.synonyms === false || search.synonyms === "false"),
+    lemmas: search.lemmas === true || search.lemmas === "true",
+    mode: search.mode === "vector" || search.mode === "hybrid" ? search.mode : "lexical",
     page: Number.isInteger(page) && page >= 1 && page <= 1_000_000 ? page : 1,
     page_size: PAGE_SIZES.includes(pageSize) ? pageSize : PAGE_SIZES[0],
   };
 }
+
+export type SearchMode = "lexical" | "vector" | "hybrid";
 
 export interface SearchParams {
   q: string;
@@ -19,6 +23,8 @@ export interface SearchParams {
   /** Typo repair and synonym expansion; on unless the URL turns them off. */
   fuzzy: boolean;
   synonyms: boolean;
+  lemmas: boolean;
+  mode: SearchMode;
   page: number;
 }
 
@@ -36,11 +42,13 @@ export function searchParams(search: Record<string, unknown>): SearchParams {
 }
 
 /** The API path for a search; `page_size` is fixed. */
-export function searchPath({ q, source, complete_only, fuzzy, synonyms, page }: SearchParams, pageSize = 20) {
+export function searchPath({ q, source, complete_only, fuzzy, synonyms, lemmas, mode, page }: SearchParams, pageSize = 20) {
   const query = new URLSearchParams({ q, page: String(page), page_size: String(pageSize) });
   if (source) query.set("source", source);
   if (complete_only) query.set("complete_only", "true");
   if (fuzzy) query.set("fuzzy", "true");
   if (synonyms) query.set("synonyms", "true");
+  if (lemmas) query.set("lemmas", "true");
+  if (mode !== "lexical") query.set("mode", mode);
   return `/api/search?${query}`;
 }

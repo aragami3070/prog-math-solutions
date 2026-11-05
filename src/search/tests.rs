@@ -329,6 +329,7 @@ fn a_typo_finds_nothing_unless_repair_is_on_and_the_repair_is_reported() {
         Options {
             fuzzy: true,
             synonyms: false,
+            lemmas: false,
         },
     );
     assert!(!found.hits.is_empty());
@@ -351,6 +352,7 @@ fn a_known_word_is_not_treated_as_a_typo() {
         Options {
             fuzzy: true,
             synonyms: true,
+            lemmas: false,
         },
     );
     assert!(found.rewrite.corrections.is_empty());
@@ -365,6 +367,7 @@ fn quoted_phrases_are_never_rewritten() {
         Options {
             fuzzy: true,
             synonyms: true,
+            lemmas: false,
         },
     );
     assert!(found.rewrite.is_empty());
@@ -385,6 +388,7 @@ fn synonyms_expand_the_query_and_say_so() {
         Options {
             fuzzy: false,
             synonyms: true,
+            lemmas: false,
         },
     );
     assert_eq!(found.hits[0].document_id, "internals:200");
@@ -394,4 +398,53 @@ fn synonyms_expand_the_query_and_say_so() {
             .to
             .contains(&"generic associated types".to_owned())
     );
+}
+
+#[test]
+fn lemmas_add_other_forms_of_a_word_and_report_them() {
+    let (_dir, _handle, index) = fixture();
+    let table = Lemmas::parse(
+        br#"{"version":"t","forms":{"futures":{"lemma":"future","pos":"NOUN"},"bodies":{"lemma":"body","pos":"NOUN"}}}"#,
+    )
+    .unwrap();
+    let tokens = vec!["futures".to_owned()];
+    let options = Options {
+        lemmas: true,
+        ..Options::default()
+    };
+    let rewrite = index.rewrite(&tokens, options, Some(&table)).unwrap();
+    assert_eq!(rewrite.word_forms[0].from, "futures");
+    assert_eq!(rewrite.word_forms[0].to, ["future"]);
+    // Asked for but no table: the mode says it did not run.
+    let rewrite = index.rewrite(&tokens, options, None).unwrap();
+    assert_eq!(rewrite.unavailable, ["lemmas"]);
+    assert!(rewrite.word_forms.is_empty());
+}
+
+#[tokio::test]
+async fn vector_modes_degrade_to_lexical_and_say_why() {
+    use super::semantic::{Mode, Request, Semantic, answer};
+    let (_dir, _handle, index) = fixture();
+    // Nothing listens here: both services are "down".
+    let semantic = Semantic::new("http://127.0.0.1:9", "http://127.0.0.1:9");
+    for mode in [Mode::Vector, Mode::Hybrid] {
+        let found = answer(
+            &semantic,
+            index.clone(),
+            Request {
+                text: "async".into(),
+                filters: Filters::default(),
+                options: Options::default(),
+                mode,
+                offset: 0,
+                limit: 10,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(found.mode, Mode::Lexical);
+        assert!(found.degraded.is_some());
+        assert!(!found.hits.is_empty());
+        assert!(!found.total_is_pool);
+    }
 }

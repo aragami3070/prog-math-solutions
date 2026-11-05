@@ -78,6 +78,8 @@ export interface SearchHit {
 export interface SearchRewrite {
   corrections: { from: string; to: string }[];
   expansions: { from: string; to: string[] }[];
+  word_forms: { from: string; to: string[] }[];
+  unavailable: string[];
   corrected_query: string | null;
 }
 
@@ -90,6 +92,11 @@ export interface SearchResults {
   page_size: number;
   scope: {
     mode: string;
+    requested_mode: string;
+    degraded: string | null;
+    total_is_pool: boolean;
+    lemmas: boolean;
+    lemmas_version: string | null;
     fuzzy: boolean;
     synonyms: boolean;
     synonyms_version: string;

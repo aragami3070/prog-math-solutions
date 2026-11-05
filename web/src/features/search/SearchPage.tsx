@@ -43,7 +43,7 @@ export function SearchPage() {
       <PageHeading
         eyebrow="ПОИСК ПО КОРПУСУ"
         title="Поиск"
-        lead="Слова, «фраза в кавычках» или номер: rfc:3058, RFC 3058. Лексический поиск (BM25) с необязательным исправлением опечаток и синонимами."
+        lead="Слова, «фраза в кавычках» или номер: rfc:3058, RFC 3058. Лексический (BM25), векторный (смысл) или гибридный режим; опечатки, синонимы и формы слов — по желанию."
         onRefresh={() => void query.refetch()}
         refreshing={query.isFetching}
       />
@@ -57,6 +57,14 @@ export function SearchPage() {
           onChange={event => setDraft(event.target.value)}
         />
         <button type="submit" disabled={draft.trim() === ""}>Найти</button>
+        <label>
+          Режим{" "}
+          <select value={params.mode} onChange={event => void navigate({ search: { ...params, mode: event.target.value as typeof params.mode, page: 1 } })}>
+            <option value="lexical">Лексический</option>
+            <option value="vector">Векторный</option>
+            <option value="hybrid">Гибридный</option>
+          </select>
+        </label>
         <label>
           Источник{" "}
           <select value={params.source} onChange={event => void navigate({ search: { ...params, source: event.target.value as typeof params.source, page: 1 } })}>
@@ -76,6 +84,10 @@ export function SearchPage() {
           <input type="checkbox" checked={params.synonyms} onChange={event => void navigate({ search: { ...params, synonyms: event.target.checked, page: 1 } })} />{" "}
           Синонимы
         </label>
+        <label>
+          <input type="checkbox" checked={params.lemmas} onChange={event => void navigate({ search: { ...params, lemmas: event.target.checked, page: 1 } })} />{" "}
+          Формы слов
+        </label>
       </form>
 
       {!searching ? (
@@ -85,15 +97,24 @@ export function SearchPage() {
       ) : data && (
         <>
           <div className="toolbar">
-            <span><strong>{number(data.total)}</strong> найдено · {data.took_ms} мс</span>
+            <span><strong>{number(data.total)}</strong> {data.scope.total_is_pool ? "кандидатов" : "найдено"} · {data.took_ms} мс · режим: {data.scope.mode}</span>
             <span title={`Анализатор ${data.scope.analyzer_version}, поколение ${data.scope.generation}`}>
               Индекс: {number(data.scope.indexed_documents)} документов
             </span>
           </div>
-          {(data.rewrite.corrections.length > 0 || data.rewrite.expansions.length > 0) && (
+          {data.scope.degraded && (
+            <p className="notice" role="alert">
+              Режим «{data.scope.requested_mode}» недоступен: {data.scope.degraded}. Показан лексический поиск.
+            </p>
+          )}
+          {data.rewrite.unavailable.length > 0 && (
+            <p className="notice" role="status">Не сработало: {data.rewrite.unavailable.join(", ")} (нет таблицы лемм).</p>
+          )}
+          {(data.rewrite.corrections.length > 0 || data.rewrite.expansions.length > 0 || data.rewrite.word_forms.length > 0) && (
             <p className="notice" role="status">
               {data.rewrite.corrections.length > 0 && <>Исправлено: {data.rewrite.corrections.map(item => `${item.from} → ${item.to}`).join(", ")}. Исходные слова тоже учтены. </>}
-              {data.rewrite.expansions.length > 0 && <>Добавлены синонимы: {data.rewrite.expansions.map(item => `${item.from} ≈ ${item.to.join(" / ")}`).join("; ")}.</>}
+              {data.rewrite.expansions.length > 0 && <>Добавлены синонимы: {data.rewrite.expansions.map(item => `${item.from} ≈ ${item.to.join(" / ")}`).join("; ")}. </>}
+              {data.rewrite.word_forms.length > 0 && <>Формы слов: {data.rewrite.word_forms.map(item => `${item.from} ≈ ${item.to.join(" / ")}`).join("; ")}.</>}
             </p>
           )}
           {data.hits.length === 0 ? (

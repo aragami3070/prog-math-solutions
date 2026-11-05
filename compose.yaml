@@ -14,5 +14,14 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+  # Vector store for semantic search. Optional: without it search degrades to lexical.
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    profiles: ["vectors"]
 volumes:
   postgres-data:
+  qdrant-data:

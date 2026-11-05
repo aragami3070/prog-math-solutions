@@ -15,7 +15,10 @@ use crate::{
         sources::{Completeness, DocumentPage, DocumentSummary, Source},
         statistics::{SourceStats, Statistics},
     },
-    search::{Hit, SearchHandle, SnippetPart},
+    search::{
+        Hit, SearchHandle, SnippetPart,
+        semantic::{Mode, Semantic},
+    },
 };
 use axum::{Json, Router, extract::DefaultBodyLimit, http::StatusCode};
 use errors::ErrorBody;
@@ -35,6 +38,7 @@ pub struct AppState {
     pub crawler: Crawler,
     pub export_slots: Arc<Semaphore>,
     pub search: Arc<SearchHandle>,
+    pub semantic: Semantic,
 }
 
 impl AppState {
@@ -49,6 +53,7 @@ impl AppState {
             pool,
             export_slots: Arc::new(Semaphore::new(1)),
             search: Arc::new(SearchHandle::open(&config.search_dir)),
+            semantic: Semantic::from_env(),
         }
     }
 }
@@ -78,6 +83,7 @@ impl AppState {
         Statistics,
         SearchResults,
         SearchScope,
+        Mode,
         RebuildResult,
         Hit,
         SnippetPart,

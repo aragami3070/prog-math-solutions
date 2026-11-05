@@ -14,7 +14,10 @@ use rust_knowledge::{
         Query, QueryMetrics, Summary, bootstrap_diff, evaluate_query, group_runs, read_qrels,
         read_queries, read_run, summarize,
     },
-    search::{ANALYZER_VERSION, Filters, Options, SYNONYMS_VERSION, SearchHandle},
+    search::{
+        ANALYZER_VERSION, Filters, Lemmas, Options, SYNONYMS_VERSION, SearchHandle,
+        semantic::{Mode, Request, Semantic, answer},
+    },
     use_cases::search::rebuild,
 };
 use serde_json::{Value, json};
@@ -120,9 +123,17 @@ async fn run(options: &HashMap<String, String>) -> Result<()> {
         .context("no index: run `eval rebuild` first")?;
     let pool = pool_connection().await?;
     let (corpus_sha256, documents) = corpus_fingerprint(&pool).await?;
+    let mode = match options.get("mode").map(String::as_str).unwrap_or("lexical") {
+        "lexical" => Mode::Lexical,
+        "vector" => Mode::Vector,
+        "hybrid" => Mode::Hybrid,
+        other => anyhow::bail!("unknown --mode {other}"),
+    };
+    let semantic = Semantic::from_env();
     let rewriting = Options {
         fuzzy: options.get("fuzzy").is_some_and(|v| v == "on"),
         synonyms: options.get("synonyms").is_some_and(|v| v == "on"),
+        lemmas: options.get("lemmas").is_some_and(|v| v == "on"),
     };
     let mut lines = String::new();
     let mut empty = 0;
@@ -131,9 +142,25 @@ async fn run(options: &HashMap<String, String>) -> Result<()> {
             source: query.filters.source.clone(),
             complete_only: query.filters.complete_only,
         };
-        let found = index.search(&query.text, &filters, rewriting, 0, DEPTH);
+        let found = answer(
+            &semantic,
+            index.clone(),
+            Request {
+                text: query.text.clone(),
+                filters,
+                options: rewriting,
+                mode,
+                offset: 0,
+                limit: DEPTH,
+            },
+        )
+        .await;
         let hits = match found {
             Ok(found) => {
+                // A run that quietly fell back to lexical would be recorded as the wrong variant.
+                if let Some(reason) = &found.degraded {
+                    anyhow::bail!("{} degraded: {reason}", query.query_id);
+                }
                 if !found.rewrite.is_empty() {
                     eprintln!(
                         "{} {:?}: {} -> {:?}",
@@ -180,9 +207,12 @@ async fn run(options: &HashMap<String, String>) -> Result<()> {
     );
     let meta = json!({
         "variant": variant,
+        "mode": mode.as_str(),
         "fuzzy": rewriting.fuzzy,
         "synonyms": rewriting.synonyms,
         "synonyms_version": SYNONYMS_VERSION,
+        "lemmas": rewriting.lemmas,
+        "lemma_table": Lemmas::shared().map(|l| json!({"version": l.version, "sha256": l.sha256})),
         "analyzer_version": ANALYZER_VERSION,
         "index_generation": index.generation(),
         "indexed_documents": index.documents(),

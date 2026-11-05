@@ -1,0 +1,21 @@
+{
+  "analyzer_version": "rust-v2",
+  "corpus_documents": 4943,
+  "corpus_sha256": "4a8a8bdf08ff9c9fa5f7a405f0ccab6aa3aabf470fd3840da03080583a3d54bd",
+  "depth": 20,
+  "fuzzy": false,
+  "index_generation": "gen-1793861182520",
+  "indexed_documents": 4943,
+  "lemma_table": {
+    "sha256": "1d3a2bdb026f4b1f727ba01d6f37b90a08605ee2eef1c144d04605ba4a4d2b37",
+    "version": "lemmas-v1"
+  },
+  "lemmas": true,
+  "mode": "lexical",
+  "queries": 84,
+  "queries_sha256": "72936644166202552e6856df99f75a259c2a3b75deaff1660df772ff4c8bbb2c",
+  "queries_without_results": 7,
+  "synonyms": false,
+  "synonyms_version": "syn-v1",
+  "variant": "b4-lemma"
+}
