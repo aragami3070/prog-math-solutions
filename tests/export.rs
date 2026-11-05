@@ -33,6 +33,7 @@ fn state(pool: PgPool) -> (AppState, Config) {
         crawl_delay: Duration::from_secs(5),
         fresh_for: Duration::from_secs(3600),
         search_dir: std::env::temp_dir().join("rks-test-index"),
+        search_refresh: None,
     };
     (AppState::new(pool, &config), config)
 }

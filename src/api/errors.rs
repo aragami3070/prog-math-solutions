@@ -84,7 +84,9 @@ impl From<use_cases::search::errors::Error> for Error {
                 Self(StatusCode::BAD_REQUEST, error.to_string())
             }
             SearchError::NotBuilt => Self(StatusCode::SERVICE_UNAVAILABLE, error.to_string()),
-            SearchError::Busy => Self(StatusCode::CONFLICT, error.to_string()),
+            SearchError::Busy | SearchError::GenerationChanged => {
+                Self(StatusCode::CONFLICT, error.to_string())
+            }
             SearchError::Repository(error) => Self::database(error),
             error => {
                 tracing::error!(%error, "search failed");

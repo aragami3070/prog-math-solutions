@@ -47,6 +47,13 @@ pub async fn execute(
         }
     };
     let index = handle.current().ok_or(Error::NotBuilt)?;
+    if query
+        .generation
+        .as_deref()
+        .is_some_and(|expected| expected != index.generation())
+    {
+        return Err(Error::GenerationChanged);
+    }
     let started = Instant::now();
     let request_source = query.source.map(|source| source.as_str().to_owned());
     let filters = Filters {

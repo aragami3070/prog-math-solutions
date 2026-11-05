@@ -42,6 +42,13 @@ async fn run(config: Config) -> Result<()> {
     }
     let state = AppState::new(pool, &config);
     let crawler = state.crawler.clone();
+    if let Some(every) = config.search_refresh {
+        tokio::spawn(refresh_loop(
+            state.pool.clone(),
+            state.search.clone(),
+            every,
+        ));
+    }
     let listener = tokio::net::TcpListener::bind(config.bind).await?;
     tracing::info!(address = %listener.local_addr()?, "local server ready; crawling starts only on an explicit API request");
     let result = axum::serve(listener, api::router(state, &config.web_dist))
@@ -50,6 +57,26 @@ async fn run(config: Config) -> Result<()> {
     crawler.shutdown().await;
     result?;
     Ok(())
+}
+
+/// Keeps the index current: rebuilds it when the corpus changed, never touches the sources.
+async fn refresh_loop(
+    pool: sqlx::PgPool,
+    search: std::sync::Arc<rust_knowledge::search::SearchHandle>,
+    every: std::time::Duration,
+) {
+    let mut ticker = tokio::time::interval(every);
+    loop {
+        ticker.tick().await;
+        match rust_knowledge::use_cases::search::refresh::execute(&pool, &search).await {
+            Ok(Some(done)) => {
+                tracing::info!(generation = %done.generation, documents = done.documents, "search index refreshed")
+            }
+            Ok(None) => tracing::debug!("search index is current"),
+            // Busy: a manual rebuild is running, which is just as good.
+            Err(error) => tracing::warn!(%error, "search index refresh failed"),
+        }
+    }
 }
 
 async fn shutdown_signal() {

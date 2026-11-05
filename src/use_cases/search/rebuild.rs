@@ -17,6 +17,7 @@ pub async fn execute(
     let _only_builder = handle.rebuilding.try_lock().map_err(|_| Error::Busy)?;
     let started = Instant::now();
     let mut builder = handle.begin()?;
+    builder.set_marker(search::corpus_marker(tx).await?);
     let mut rows = search::documents(tx);
     while let Some(row) = rows.try_next().await? {
         let title = display_title(&row.source, &row.title);

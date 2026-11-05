@@ -28,6 +28,7 @@ fn app(pool: PgPool, index_dir: &std::path::Path) -> axum::Router {
         crawl_delay: Duration::from_secs(5),
         fresh_for: Duration::from_secs(3600),
         search_dir: index_dir.to_owned(),
+        search_refresh: None,
     };
     api::router(AppState::new(pool, &config), &config.web_dist)
 }

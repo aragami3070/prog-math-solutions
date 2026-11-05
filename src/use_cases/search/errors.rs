@@ -6,6 +6,8 @@ pub enum Error {
     InvalidQuery(&'static str),
     #[error("search index is not built; POST /api/search/rebuild first")]
     NotBuilt,
+    #[error("the index was rebuilt since the first page; repeat the search from page 1")]
+    GenerationChanged,
     #[error("the index is being rebuilt; try again later")]
     Busy,
     #[error("search index failed")]

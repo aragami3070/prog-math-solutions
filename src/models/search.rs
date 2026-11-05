@@ -31,6 +31,9 @@ pub struct SearchQuery {
     /// request joins the running experiment: the arm assigned to the session decides `mode`
     /// and the rewriting flags, whatever they say here, and the search is recorded.
     pub session: Option<String>,
+    /// The `scope.generation` the earlier pages came from. If the index was rebuilt since, the
+    /// answer is 409 instead of a page of a different ranking: start again from page 1.
+    pub generation: Option<String>,
     #[serde(default = "first_page")]
     pub page: u32,
     #[serde(default = "default_page_size")]

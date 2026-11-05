@@ -206,6 +206,7 @@ async fn collection_lifecycle(pool: PgPool) {
         crawl_delay: std::time::Duration::from_secs(5),
         fresh_for: std::time::Duration::from_secs(3600),
         search_dir: std::env::temp_dir().join("rks-test-index"),
+        search_refresh: None,
     };
     let app = api::router(AppState::new(pool.clone(), &config), &config.web_dist);
     let response = app

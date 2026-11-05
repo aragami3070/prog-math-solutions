@@ -84,6 +84,9 @@ struct Manifest {
     analyzer_version: String,
     documents: u64,
     built_at: String,
+    /// Fingerprint of the corpus the generation was built from; older manifests have none.
+    #[serde(default)]
+    corpus_marker: Option<String>,
 }
 
 pub struct SearchIndex {
@@ -92,6 +95,7 @@ pub struct SearchIndex {
     pub(super) fields: Fields,
     generation: String,
     documents: u64,
+    marker: Option<String>,
     vocabulary: OnceLock<Vocabulary>,
 }
 
@@ -108,10 +112,16 @@ impl SearchIndex {
             Index::open_in_dir(&dir)?,
             generation.to_owned(),
             manifest.documents,
+            manifest.corpus_marker,
         )
     }
 
-    fn from_index(index: Index, generation: String, documents: u64) -> Result<Self, Error> {
+    fn from_index(
+        index: Index,
+        generation: String,
+        documents: u64,
+        marker: Option<String>,
+    ) -> Result<Self, Error> {
         // Tokenizers are not stored in the index files; every open registers them again.
         index.tokenizers().register(ANALYZER_NAME, analyzer());
         let fields = schema().1;
@@ -126,6 +136,7 @@ impl SearchIndex {
             fields,
             generation,
             documents,
+            marker,
             vocabulary: OnceLock::new(),
         })
     }
@@ -145,6 +156,11 @@ impl SearchIndex {
     pub fn documents(&self) -> u64 {
         self.documents
     }
+
+    /// Fingerprint of the corpus this generation was built from.
+    pub fn marker(&self) -> Option<&str> {
+        self.marker.as_deref()
+    }
 }
 
 /// The only writer of a new generation. Dropped without `finish`, it removes its directory.
@@ -155,6 +171,7 @@ pub struct Builder {
     writer: Option<IndexWriter>,
     fields: Fields,
     documents: u64,
+    marker: Option<String>,
 }
 
 impl Builder {
@@ -177,7 +194,13 @@ impl Builder {
             writer: Some(writer),
             fields,
             documents: 0,
+            marker: None,
         })
+    }
+
+    /// Records which corpus snapshot the documents come from.
+    pub fn set_marker(&mut self, marker: String) {
+        self.marker = Some(marker);
     }
 
     pub fn add(&mut self, doc: IndexDocument) -> Result<(), Error> {
@@ -207,13 +230,18 @@ impl Builder {
             analyzer_version: ANALYZER_VERSION.into(),
             documents: self.documents,
             built_at: chrono::Utc::now().to_rfc3339(),
+            corpus_marker: self.marker.clone(),
         };
         fs::write(
             self.dir.join(MANIFEST),
             serde_json::to_vec_pretty(&manifest)?,
         )?;
-        let index =
-            SearchIndex::from_index(self.index.clone(), self.generation.clone(), self.documents)?;
+        let index = SearchIndex::from_index(
+            self.index.clone(),
+            self.generation.clone(),
+            self.documents,
+            self.marker.clone(),
+        )?;
         // Kept: the directory now belongs to the installed generation.
         self.dir = PathBuf::new();
         Ok(index)

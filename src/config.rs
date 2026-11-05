@@ -16,6 +16,8 @@ pub struct Config {
     pub fresh_for: Duration,
     /// Where search index generations are kept.
     pub search_dir: PathBuf,
+    /// How often to check whether the corpus changed and rebuild the index; `None` = never.
+    pub search_refresh: Option<Duration>,
 }
 
 impl Config {
@@ -53,8 +55,24 @@ impl Config {
             search_dir: env::var("SEARCH_INDEX_DIR")
                 .unwrap_or_else(|_| "data/index".into())
                 .into(),
+            search_refresh: refresh_interval(
+                &env::var("SEARCH_REFRESH_MINUTES").unwrap_or_default(),
+            )?,
         })
     }
+}
+
+/// `SEARCH_REFRESH_MINUTES`: empty or 0 turns the automatic refresh off.
+fn refresh_interval(value: &str) -> Result<Option<Duration>> {
+    if value.trim().is_empty() {
+        return Ok(None);
+    }
+    let minutes: u64 = value
+        .trim()
+        .parse()
+        .context("invalid SEARCH_REFRESH_MINUTES")?;
+    ensure!(minutes <= 1440, "SEARCH_REFRESH_MINUTES must be 0..1440");
+    Ok((minutes > 0).then(|| Duration::from_secs(minutes * 60)))
 }
 
 fn parse_fresh_days(value: &str) -> Result<Duration> {
@@ -78,8 +96,21 @@ fn optional(key: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_bind, parse_fresh_days};
+    use super::{parse_bind, parse_fresh_days, refresh_interval};
     use std::time::Duration;
+
+    #[test]
+    fn automatic_refresh_is_off_unless_asked_for() {
+        assert_eq!(refresh_interval("").unwrap(), None);
+        assert_eq!(refresh_interval("0").unwrap(), None);
+        assert_eq!(
+            refresh_interval("15").unwrap(),
+            Some(Duration::from_secs(900))
+        );
+        assert!(refresh_interval("-1").is_err());
+        assert!(refresh_interval("5000").is_err());
+        assert!(refresh_interval("soon").is_err());
+    }
 
     #[test]
     fn local_api_only_accepts_loopback_bind_addresses() {

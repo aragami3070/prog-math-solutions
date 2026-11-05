@@ -18,3 +18,18 @@ pub fn documents<'a>(
     )
     .fetch(&mut **tx)
 }
+
+/// What the index must reflect: changes when a document appears, goes, or changes content or
+/// completeness. Not affected by a recrawl that found the same content.
+pub async fn corpus_marker(tx: &mut Transaction<'_, Postgres>) -> Result<String, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"
+        SELECT COALESCE(md5(string_agg(
+            source || ':' || native_id || ':' || content_hash || ':' || completeness || ':' || title,
+            ',' ORDER BY id)), '') || ':' || COUNT(*)::TEXT AS "marker!"
+        FROM documents
+        "#
+    )
+    .fetch_one(&mut **tx)
+    .await
+}
