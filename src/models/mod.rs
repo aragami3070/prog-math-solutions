@@ -1,4 +1,5 @@
 pub mod crawls;
+pub mod events;
 pub mod exports;
 pub mod graph;
 pub mod pagination;

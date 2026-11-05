@@ -149,3 +149,38 @@ async fn invalid_export_parameters_are_rejected_before_database() {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 }
+
+#[tokio::test]
+async fn experiment_config_and_assignment_need_no_database() {
+    let response = app()
+        .oneshot(
+            Request::get("/api/experiment?session=abcdef12-test")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = http_body_util::BodyExt::collect(response.into_body())
+        .await
+        .unwrap()
+        .to_bytes();
+    let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(value["config"]["id"], "hybrid-vs-b0");
+    assert!(["b0", "hybrid"].contains(&value["assignment"]["variant"].as_str().unwrap()));
+}
+
+#[tokio::test]
+async fn a_malformed_session_is_rejected_before_any_work() {
+    for uri in [
+        "/api/experiment?session=short",
+        "/api/search?q=x&session=has%20space%20in%20it",
+        "/api/search?q=x&session=short",
+    ] {
+        let response = app()
+            .oneshot(Request::get(uri).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{uri}");
+    }
+}

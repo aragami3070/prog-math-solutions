@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO search_events (\n            kind, session_id, experiment, variant, query, mode, requested_mode, source,\n            complete_only, results, latency_ms, degraded, generation\n        )\n        VALUES ('search', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)\n        RETURNING query_id::text AS \"query_id!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "query_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Int4",
+        "Int4",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "f569289c084ec381601d1fcb33a3a35a7bccacacbc53ac7e2ebe7784cbacf3ce"
+}

@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT at, kind, session_id, variant, query_id::text AS \"query_id!\", query, results,\n               latency_ms, degraded, document_id, rank\n        FROM search_events\n        WHERE experiment = $1 AND ($2::timestamptz IS NULL OR at >= $2)\n        ORDER BY at, id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "session_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "variant",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "query_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "query",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "results",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "latency_ms",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "degraded",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
+        "name": "document_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "rank",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "a6b43cea254f8cc957eba359d34527737d5c6211475a97a08b6aab419c500c74"
+}

@@ -1,6 +1,8 @@
 use super::errors::Error;
 use crate::{
+    experiment::{EXPERIMENT, valid_session},
     models::{
+        events::ExperimentInfo,
         pagination::Pagination,
         search::{SearchQuery, SearchResults, SearchScope},
     },
@@ -15,7 +17,7 @@ use std::time::Instant;
 pub async fn execute(
     handle: &SearchHandle,
     semantic: &Semantic,
-    query: SearchQuery,
+    mut query: SearchQuery,
 ) -> Result<SearchResults, Error> {
     let pagination = Pagination {
         page: query.page,
@@ -24,10 +26,31 @@ pub async fn execute(
     if !pagination.valid() {
         return Err(Error::InvalidPagination);
     }
+    // In the experiment the arm decides the configuration: one change per experiment.
+    let experiment = match query.session.as_deref() {
+        None => None,
+        Some(session) if valid_session(session) => {
+            let variant = EXPERIMENT.assign(session);
+            query.mode = variant.mode;
+            (query.fuzzy, query.synonyms, query.lemmas) = (false, false, false);
+            Some(ExperimentInfo {
+                id: EXPERIMENT.id,
+                version: EXPERIMENT.version,
+                variant: variant.name,
+                query_id: None,
+            })
+        }
+        Some(_) => {
+            return Err(Error::InvalidQuery(
+                "session must be 8..64 characters of A-Za-z0-9_-",
+            ));
+        }
+    };
     let index = handle.current().ok_or(Error::NotBuilt)?;
     let started = Instant::now();
+    let request_source = query.source.map(|source| source.as_str().to_owned());
     let filters = Filters {
-        source: query.source.map(|source| source.as_str().to_owned()),
+        source: request_source.clone(),
         complete_only: query.complete_only,
     };
     let options = Options {
@@ -58,6 +81,8 @@ pub async fn execute(
             fuzzy: query.fuzzy,
             synonyms: query.synonyms,
             lemmas: query.lemmas,
+            source: request_source,
+            complete_only: query.complete_only,
             lemmas_version: Lemmas::shared().map(|lemmas| lemmas.version.clone()),
             synonyms_version: SYNONYMS_VERSION,
             analyzer_version: ANALYZER_VERSION,
@@ -66,6 +91,7 @@ pub async fn execute(
             max_depth: MAX_DEPTH,
         },
         rewrite: found.rewrite,
+        experiment,
         took_ms: started.elapsed().as_millis() as u64,
     })
 }

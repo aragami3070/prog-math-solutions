@@ -1,0 +1,152 @@
+{
+  "experiment": "hybrid-vs-b0",
+  "version": 1,
+  "source": "SYNTHETIC traffic from small.jsonl: checks the pipeline, says nothing about the search",
+  "control": "b0",
+  "treatment": "hybrid",
+  "control_sessions": 186,
+  "treatment_sessions": 214,
+  "ignored_events": 0,
+  "srm_chi2": 1.96,
+  "srm_p": 0.1615134275989935,
+  "srm_ok": true,
+  "required_per_arm": 1266,
+  "metrics": [
+    {
+      "name": "session success rate",
+      "role": "primary",
+      "better": "higher",
+      "control": 0.6935483870967742,
+      "treatment": 0.8411214953271028,
+      "difference": 0.14757310823032854,
+      "ci_low": 0.0643653904130238,
+      "ci_high": 0.2307808260476334,
+      "p_value": 0.00046273647682149033,
+      "p_adjusted": null
+    },
+    {
+      "name": "MRR of the first click",
+      "role": "secondary",
+      "better": "higher",
+      "control": 0.44938769414575863,
+      "treatment": 0.5585020768431984,
+      "difference": 0.10911438269743978,
+      "ci_low": 0.03098264831005232,
+      "ci_high": 0.1848080594915082,
+      "p_value": 0.004686785581770492,
+      "p_adjusted": 0.02343392790885246
+    },
+    {
+      "name": "CTR@3",
+      "role": "secondary",
+      "better": "higher",
+      "control": 0.5725806451612904,
+      "treatment": 0.6814641744548287,
+      "difference": 0.10888352929353828,
+      "ci_low": 0.023188624258868695,
+      "ci_high": 0.1923173550396945,
+      "p_value": 0.011557841582597872,
+      "p_adjusted": 0.05778920791298936
+    },
+    {
+      "name": "CTR@10",
+      "role": "secondary",
+      "better": "higher",
+      "control": 0.620967741935484,
+      "treatment": 0.7188473520249221,
+      "difference": 0.09787961008943813,
+      "ci_low": 0.015459082839245575,
+      "ci_high": 0.17689176967138998,
+      "p_value": 0.018021411197677972,
+      "p_adjusted": 0.09010705598838986
+    },
+    {
+      "name": "abandonment (queries without a click)",
+      "role": "secondary",
+      "better": "lower",
+      "control": 0.3790322580645161,
+      "treatment": 0.2811526479750779,
+      "difference": -0.09787961008943824,
+      "ci_low": -0.17689176967138978,
+      "ci_high": -0.015459082839245686,
+      "p_value": 0.018021411197677972,
+      "p_adjusted": 0.09010705598838986
+    },
+    {
+      "name": "reformulation rate",
+      "role": "secondary",
+      "better": "lower",
+      "control": 0.16397849462365593,
+      "treatment": 0.18535825545171342,
+      "difference": 0.02137976082805748,
+      "ci_low": -0.028330486048303405,
+      "ci_high": 0.0707215355240679,
+      "p_value": 0.3976164516329974,
+      "p_adjusted": 1.0
+    },
+    {
+      "name": "zero-result rate",
+      "role": "guardrail",
+      "better": "lower",
+      "control": 0.013440860215053764,
+      "treatment": 0.028816199376947037,
+      "difference": 0.015375339161893273,
+      "ci_low": -0.007486684755300977,
+      "ci_high": 0.039794995477841426,
+      "p_value": 0.2169360784588963,
+      "p_adjusted": null
+    },
+    {
+      "name": "degraded answers",
+      "role": "guardrail",
+      "better": "lower",
+      "control": 0.0,
+      "treatment": 0.0,
+      "difference": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.0,
+      "p_value": 1.0,
+      "p_adjusted": null
+    }
+  ],
+  "control_p95_latency_ms": 58,
+  "treatment_p95_latency_ms": 118,
+  "slices": [
+    {
+      "kind": "rfc_id",
+      "control_sessions": 21,
+      "treatment_sessions": 32,
+      "success": null
+    },
+    {
+      "kind": "identifier",
+      "control_sessions": 25,
+      "treatment_sessions": 30,
+      "success": null
+    },
+    {
+      "kind": "english_prose",
+      "control_sessions": 116,
+      "treatment_sessions": 118,
+      "success": {
+        "name": "session success rate",
+        "role": "secondary",
+        "better": "higher",
+        "control": 0.7155172413793104,
+        "treatment": 0.8559322033898306,
+        "difference": 0.14041496201052017,
+        "ci_low": 0.028930450029222676,
+        "ci_high": 0.24298655756867327,
+        "p_value": 0.008234422523396123,
+        "p_adjusted": null
+      }
+    },
+    {
+      "kind": "russian",
+      "control_sessions": 24,
+      "treatment_sessions": 34,
+      "success": null
+    }
+  ],
+  "verdict": "Preliminary only (186 sessions in the smaller arm, 1266 needed to detect 5 points): the interval excludes zero (difference +0.148, [+0.064, +0.231]) but the sample is below the plan; repeat with more traffic before relying on it."
+}

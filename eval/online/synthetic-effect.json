@@ -1,0 +1,185 @@
+{
+  "experiment": "hybrid-vs-b0",
+  "version": 1,
+  "source": "SYNTHETIC traffic from effect.jsonl: checks the pipeline, says nothing about the search",
+  "control": "b0",
+  "treatment": "hybrid",
+  "control_sessions": 2954,
+  "treatment_sessions": 3046,
+  "ignored_events": 0,
+  "srm_chi2": 1.4106666666666667,
+  "srm_p": 0.23494588073443382,
+  "srm_ok": true,
+  "required_per_arm": 1147,
+  "metrics": [
+    {
+      "name": "session success rate",
+      "role": "primary",
+      "better": "higher",
+      "control": 0.7335815842924848,
+      "treatment": 0.7872619829284307,
+      "difference": 0.05368039863594598,
+      "ci_low": 0.03341896828187596,
+      "ci_high": 0.07437237466053137,
+      "p_value": 1.0824257052899355e-6,
+      "p_adjusted": null
+    },
+    {
+      "name": "MRR of the first click",
+      "role": "secondary",
+      "better": "higher",
+      "control": 0.48102351130025384,
+      "treatment": 0.4981303218376425,
+      "difference": 0.01710681053738866,
+      "ci_low": -0.0016257729339299032,
+      "ci_high": 0.03597220861232048,
+      "p_value": 0.08540912222309749,
+      "p_adjusted": 0.42704561111548744
+    },
+    {
+      "name": "CTR@3",
+      "role": "secondary",
+      "better": "higher",
+      "control": 0.5914579101782885,
+      "treatment": 0.6273801707156921,
+      "difference": 0.03592226053740355,
+      "ci_low": 0.014622734263596282,
+      "ci_high": 0.05720852443381952,
+      "p_value": 0.0014136283607764089,
+      "p_adjusted": 0.007068141803882044
+    },
+    {
+      "name": "CTR@10",
+      "role": "secondary",
+      "better": "higher",
+      "control": 0.6437598736176924,
+      "treatment": 0.6949004158459172,
+      "difference": 0.05114054222822484,
+      "ci_low": 0.030376067676948226,
+      "ci_high": 0.07078345679198972,
+      "p_value": 1.5688165477811822e-6,
+      "p_adjusted": 7.844082738905911e-6
+    },
+    {
+      "name": "abandonment (queries without a click)",
+      "role": "secondary",
+      "better": "lower",
+      "control": 0.356240126382306,
+      "treatment": 0.3050995841540815,
+      "difference": -0.051140542228224506,
+      "ci_low": -0.07078345679198955,
+      "ci_high": -0.030376067676948837,
+      "p_value": 1.5688165477811822e-6,
+      "p_adjusted": 7.844082738905911e-6
+    },
+    {
+      "name": "reformulation rate",
+      "role": "secondary",
+      "better": "lower",
+      "control": 0.17507334687429515,
+      "treatment": 0.16579120157583752,
+      "difference": -0.00928214529845764,
+      "ci_low": -0.021907484026244317,
+      "ci_high": 0.0031476289314243677,
+      "p_value": 0.15321489675434652,
+      "p_adjusted": 0.7660744837717326
+    },
+    {
+      "name": "zero-result rate",
+      "role": "guardrail",
+      "better": "lower",
+      "control": 0.015402843601895738,
+      "treatment": 0.013514992339680454,
+      "difference": -0.0018878512622152836,
+      "ci_low": -0.00679304156399438,
+      "ci_high": 0.0028022514330406333,
+      "p_value": 0.4501963449895543,
+      "p_adjusted": null
+    },
+    {
+      "name": "degraded answers",
+      "role": "guardrail",
+      "better": "lower",
+      "control": 0.0,
+      "treatment": 0.0,
+      "difference": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.0,
+      "p_value": 1.0,
+      "p_adjusted": null
+    }
+  ],
+  "control_p95_latency_ms": 58,
+  "treatment_p95_latency_ms": 118,
+  "slices": [
+    {
+      "kind": "rfc_id",
+      "control_sessions": 357,
+      "treatment_sessions": 373,
+      "success": {
+        "name": "session success rate",
+        "role": "secondary",
+        "better": "higher",
+        "control": 0.7815126050420168,
+        "treatment": 0.8123324396782842,
+        "difference": 0.030819834636267363,
+        "ci_low": -0.02996372811859327,
+        "ci_high": 0.0905219996845924,
+        "p_value": 0.30141404877963707,
+        "p_adjusted": null
+      }
+    },
+    {
+      "kind": "identifier",
+      "control_sessions": 366,
+      "treatment_sessions": 396,
+      "success": {
+        "name": "session success rate",
+        "role": "secondary",
+        "better": "higher",
+        "control": 0.7049180327868853,
+        "treatment": 0.7348484848484849,
+        "difference": 0.02993045206159961,
+        "ci_low": -0.03291107799304516,
+        "ci_high": 0.0912816691505216,
+        "p_value": 0.3586524255509993,
+        "p_adjusted": null
+      }
+    },
+    {
+      "kind": "english_prose",
+      "control_sessions": 1877,
+      "treatment_sessions": 1932,
+      "success": {
+        "name": "session success rate",
+        "role": "secondary",
+        "better": "higher",
+        "control": 0.7368140649973361,
+        "treatment": 0.7893374741200828,
+        "difference": 0.05252340912274667,
+        "ci_low": 0.024696362527313886,
+        "ci_high": 0.07975702383985728,
+        "p_value": 0.00013586558297729034,
+        "p_adjusted": null
+      }
+    },
+    {
+      "kind": "russian",
+      "control_sessions": 354,
+      "treatment_sessions": 345,
+      "success": {
+        "name": "session success rate",
+        "role": "secondary",
+        "better": "higher",
+        "control": 0.6977401129943502,
+        "treatment": 0.808695652173913,
+        "difference": 0.1109555391795628,
+        "ci_low": 0.04733480717268479,
+        "ci_high": 0.17361827560795873,
+        "p_value": 0.0006064110123482624,
+        "p_adjusted": null
+      }
+    }
+  ],
+  "verdict": "hybrid is better on the primary metric (2954 sessions in the smaller arm, 1147 needed to detect 5 points): +0.054 [+0.033, +0.074]."
+}

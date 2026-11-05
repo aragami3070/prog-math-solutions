@@ -8,12 +8,15 @@
 //!   eval compare --a b0 --b typo          paired bootstrap of nDCG@10, by query group
 //!   eval review  --variant b0 --n 20      the top 10 of N test queries for a human to judge blind
 //!   eval agreement                        silver vs human judgments: agreement and Cohen's kappa
+//!   eval online-simulate --sessions 4000 --effect 0.06   synthetic events -> eval/online/synthetic.jsonl
+//!   eval online-report --events f.jsonl --synthetic yes  | --db yes     A/B report -> eval/online/<name>.{json,md}
 use anyhow::{Context, Result, bail, ensure};
 use rust_knowledge::{
     evaluation::{
         Query, QueryMetrics, Summary, bootstrap_diff, evaluate_query, group_runs, read_qrels,
         read_queries, read_run, summarize,
     },
+    experiment::{EXPERIMENT, analysis, simulate},
     search::{
         ANALYZER_VERSION, Filters, Lemmas, Options, SYNONYMS_VERSION, SearchHandle,
         semantic::{Mode, Request, Semantic, answer},
@@ -48,6 +51,8 @@ fn main() -> Result<()> {
             "compare" => compare(&options),
             "review" => review(&options),
             "agreement" => agreement(),
+            "online-simulate" => online_simulate(&options),
+            "online-report" => online_report(&options).await,
             _ => bail!(
                 "usage: eval rebuild | run | pool | qrels | score | compare (see the file header)"
             ),
@@ -596,5 +601,72 @@ fn agreement() -> Result<()> {
     for row in counts {
         println!("{row:?}");
     }
+    Ok(())
+}
+
+fn online_simulate(options: &HashMap<String, String>) -> Result<()> {
+    let number = |name: &str, default: f64| -> Result<f64> {
+        options.get(name).map_or(Ok(default), |v| {
+            v.parse()
+                .with_context(|| format!("--{name} must be a number"))
+        })
+    };
+    let events = simulate::events(
+        number("sessions", 4000.0)? as usize,
+        number("seed", 1.0)? as u64,
+        number("baseline", 0.55)?,
+        number("effect", 0.0)?,
+    );
+    let out = PathBuf::from(
+        options
+            .get("out")
+            .map_or("eval/online/synthetic.jsonl", String::as_str),
+    );
+    fs::create_dir_all(out.parent().unwrap_or(Path::new(".")))?;
+    let lines: Result<Vec<String>, _> = events.iter().map(serde_json::to_string).collect();
+    fs::write(&out, lines?.join("\n") + "\n")?;
+    println!("{} events -> {}", events.len(), out.display());
+    Ok(())
+}
+
+async fn online_report(options: &HashMap<String, String>) -> Result<()> {
+    let (events, source) = if let Some(path) = options.get("events") {
+        let text = fs::read_to_string(path).with_context(|| format!("reading {path}"))?;
+        let events = text
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(serde_json::from_str)
+            .collect::<Result<Vec<_>, _>>()?;
+        let source = if options.get("synthetic").is_some_and(|v| v == "yes") {
+            format!(
+                "SYNTHETIC traffic from {path}: checks the pipeline, says nothing about the search"
+            )
+        } else {
+            format!("recorded events from {path}")
+        };
+        (events, source)
+    } else {
+        ensure!(
+            options.get("db").is_some_and(|v| v == "yes"),
+            "give --events <file> or --db yes"
+        );
+        let pool = pool_connection().await?;
+        let events = rust_knowledge::repository::events::read(&pool, EXPERIMENT.id, None).await?;
+        (
+            events,
+            "events recorded by this server (search_events)".to_owned(),
+        )
+    };
+    let report = analysis::analyze(&EXPERIMENT, &events, &source);
+    let name = options.get("name").map_or("report", String::as_str);
+    let dir = PathBuf::from(EVAL).join("online");
+    fs::create_dir_all(&dir)?;
+    fs::write(
+        dir.join(format!("{name}.json")),
+        serde_json::to_vec_pretty(&report)?,
+    )?;
+    let markdown = analysis::markdown(&report, options.get("offline").map(String::as_str));
+    fs::write(dir.join(format!("{name}.md")), &markdown)?;
+    println!("{markdown}");
     Ok(())
 }

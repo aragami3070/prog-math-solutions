@@ -109,3 +109,14 @@ impl From<use_cases::graph::errors::Error> for Error {
         }
     }
 }
+
+impl From<use_cases::events::errors::Error> for Error {
+    fn from(error: use_cases::events::errors::Error) -> Self {
+        use use_cases::events::errors::Error as EventError;
+        match error {
+            EventError::UnknownSearch => Self(StatusCode::NOT_FOUND, error.to_string()),
+            EventError::Repository(error) => Self::database(error),
+            error => Self(StatusCode::BAD_REQUEST, error.to_string()),
+        }
+    }
+}

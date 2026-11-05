@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     models::search::{RebuildResult, SearchQuery, SearchResults},
-    use_cases::search,
+    use_cases::{events, search},
 };
 use axum::{
     Json, Router,
@@ -37,9 +37,24 @@ pub async fn search(
 ) -> Result<Json<SearchResults>, Error> {
     let Query(query) =
         query.map_err(|_| Error(StatusCode::BAD_REQUEST, "Invalid search parameters".into()))?;
-    Ok(Json(
-        search::query::execute(&state.search, &state.semantic, query).await?,
-    ))
+    let session = query.session.clone();
+    let mut results = search::query::execute(&state.search, &state.semantic, query).await?;
+    if let (Some(session), Some(variant)) =
+        (session, results.experiment.as_ref().map(|e| e.variant))
+    {
+        // The search is already answered; recording it must not be able to fail it.
+        let mut query_id = None;
+        if let Ok(mut tx) = state.pool.begin().await {
+            query_id = events::log_search::execute(&mut tx, &session, variant, &results).await;
+            if query_id.is_some() && tx.commit().await.is_err() {
+                query_id = None;
+            }
+        }
+        if let Some(info) = results.experiment.as_mut() {
+            info.query_id = query_id;
+        }
+    }
+    Ok(Json(results))
 }
 
 /// Rebuilds the search index from the database. Reads only the database, never the sources.

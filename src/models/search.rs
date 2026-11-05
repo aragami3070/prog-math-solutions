@@ -1,5 +1,5 @@
 use crate::{
-    models::sources::Source,
+    models::{events::ExperimentInfo, sources::Source},
     search::{Hit, Rewrite, semantic::Mode},
 };
 use serde::{Deserialize, Serialize};
@@ -27,6 +27,10 @@ pub struct SearchQuery {
     /// Also match other forms of a word (`objects` for `object`) via the lemma table.
     #[serde(default)]
     pub lemmas: bool,
+    /// A random session id (8..64 characters of `A-Za-z0-9_-`) made by the client. With it the
+    /// request joins the running experiment: the arm assigned to the session decides `mode`
+    /// and the rewriting flags, whatever they say here, and the search is recorded.
+    pub session: Option<String>,
     #[serde(default = "first_page")]
     pub page: u32,
     #[serde(default = "default_page_size")]
@@ -55,6 +59,8 @@ pub struct SearchScope {
     pub total_is_pool: bool,
     pub fuzzy: bool,
     pub synonyms: bool,
+    pub source: Option<String>,
+    pub complete_only: bool,
     pub synonyms_version: &'static str,
     pub lemmas: bool,
     /// Version of the lemma table when one is loaded; `null` when the mode cannot run.
@@ -78,6 +84,8 @@ pub struct SearchResults {
     pub scope: SearchScope,
     /// What the rewriting modes added: corrections and expansions. Never silent.
     pub rewrite: Rewrite,
+    /// Present when the request carried a `session`.
+    pub experiment: Option<ExperimentInfo>,
     pub took_ms: u64,
 }
 

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO search_events (kind, session_id, experiment, variant, query_id, document_id, rank)\n        SELECT 'click', session_id, experiment, variant, query_id, $2, $3\n        FROM search_events WHERE kind = 'search' AND query_id = ($1::text)::uuid\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8544321547a4556cd0209c157b8e8ca2e9d826e21e81b122420d00997c213422"
+}
