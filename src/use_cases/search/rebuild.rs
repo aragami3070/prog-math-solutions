@@ -2,7 +2,7 @@ use super::errors::Error;
 use crate::{
     models::search::RebuildResult,
     repository::search,
-    search::{IndexDocument, SearchHandle},
+    search::{IndexDocument, SearchHandle, display_title},
 };
 use futures_util::TryStreamExt;
 use sqlx::{Postgres, Transaction};
@@ -19,12 +19,13 @@ pub async fn execute(
     let mut builder = handle.begin()?;
     let mut rows = search::documents(tx);
     while let Some(row) = rows.try_next().await? {
+        let title = display_title(&row.source, &row.title);
         builder.add(IndexDocument {
             id: row.id,
             source: row.source,
             native_id: row.native_id,
             url: row.canonical_url,
-            title: row.title,
+            title,
             body: row.body_text,
             completeness: row.completeness,
         })?;

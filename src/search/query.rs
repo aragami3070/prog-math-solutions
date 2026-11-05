@@ -111,13 +111,14 @@ impl SearchIndex {
         let mut should: Vec<(Occur, Box<dyn Query>)> = Vec::new();
 
         // Exact identifiers outrank everything: `rfc:3058`, `RFC 3058`, a bare `3058`.
-        for id in exact_ids(text) {
+        // Several candidates (a bare number) rank in the order listed: the RFC before the topic.
+        for (position, id) in exact_ids(text).into_iter().enumerate() {
             let term = Term::from_field_text(f.doc_id, &id);
             should.push((
                 Occur::Should,
                 boosted(
                     TermQuery::new(term, IndexRecordOption::Basic),
-                    EXACT_ID_BOOST,
+                    EXACT_ID_BOOST / (position + 1) as f32,
                 ),
             ));
         }
@@ -274,6 +275,40 @@ fn parts(snippet: &tantivy::snippet::Snippet, body: &str) -> Vec<SnippetPart> {
         });
     }
     parts
+}
+
+/// A document as stored in the index, for tools that need its text (evaluation pools).
+pub struct StoredDocument {
+    pub document_id: String,
+    pub source: String,
+    pub title: String,
+    pub url: String,
+    pub completeness: String,
+    pub body: String,
+}
+
+impl SearchIndex {
+    pub fn document(&self, document_id: &str) -> Result<Option<StoredDocument>, Error> {
+        let f = self.fields;
+        let searcher = self.reader.searcher();
+        let term = Term::from_field_text(f.doc_id, document_id);
+        let found = searcher.search(
+            &TermQuery::new(term, IndexRecordOption::Basic),
+            &TopDocs::with_limit(1).order_by_score(),
+        )?;
+        let Some((_, address)) = found.into_iter().next() else {
+            return Ok(None);
+        };
+        let doc: TantivyDocument = searcher.doc(address)?;
+        Ok(Some(StoredDocument {
+            document_id: document_id.to_owned(),
+            source: self.stored_text(&doc, f.source),
+            title: self.stored_text(&doc, f.title),
+            url: self.stored_text(&doc, f.url),
+            completeness: self.stored_text(&doc, f.completeness),
+            body: self.stored_text(&doc, f.body),
+        }))
+    }
 }
 
 #[cfg(test)]

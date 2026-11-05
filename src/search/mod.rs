@@ -7,10 +7,12 @@
 mod analyzer;
 mod index;
 pub mod query;
+mod title;
 
 pub use analyzer::{ANALYZER_NAME, ANALYZER_VERSION, analyzer};
 pub use index::{Builder, Error, IndexDocument, SearchHandle, SearchIndex};
-pub use query::{Filters, Hit, Results, SnippetPart};
+pub use query::{Filters, Hit, Results, SnippetPart, StoredDocument};
+pub use title::display_title;
 
 #[cfg(test)]
 mod tests;

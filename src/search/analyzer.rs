@@ -1,8 +1,9 @@
 use tantivy::tokenizer::{LowerCaser, RegexTokenizer, TextAnalyzer};
 
 pub const ANALYZER_NAME: &str = "rust";
-/// Bump when tokenization changes: an index built with another version is not opened.
-pub const ANALYZER_VERSION: &str = "rust-v1";
+/// Bump when tokenization or the indexed text changes: an index built with another version
+/// is not opened. v2: RFC titles are cleaned (`RFC 1: private fields`) before indexing.
+pub const ANALYZER_VERSION: &str = "rust-v2";
 
 /// Words (letters, digits, `_`) plus the symbols that carry meaning in Rust text: `?`, `!`,
 /// `'` (lifetimes), `::`, `->`, `=>` and `..`. A prose tokenizer would drop `?` and `!Send`;
