@@ -170,8 +170,7 @@ impl<'a> Transport<'a> {
                 response.content_type.contains("text/html"),
                 "document is not HTML"
             );
-            let lower = response.body.to_ascii_lowercase();
-            if lower.contains("cf-chl-") || lower.contains("<title>just a moment") {
+            if is_challenge(&response.body) {
                 return Err(Blocked("challenge received; no bypass attempted".into()).into());
             }
             return Ok(response);
@@ -354,5 +353,42 @@ mod tests {
         }
         assert!(transient(&Err(Blocked("HTTP 429".into()).into())).is_none());
         assert!(transient(&Err(anyhow::anyhow!("document is not HTML"))).is_none());
+    }
+}
+
+/// How much of a page is searched for challenge markers. A challenge page is tiny and carries
+/// its markers in `<head>`; a long post that merely talks about Cloudflare must not stop a run.
+const CHALLENGE_PREFIX: usize = 4096;
+
+fn is_challenge(body: &str) -> bool {
+    let mut end = body.len().min(CHALLENGE_PREFIX);
+    while !body.is_char_boundary(end) {
+        end -= 1;
+    }
+    let head = body[..end].to_ascii_lowercase();
+    head.contains("<title>just a moment") || head.contains("cf-chl-")
+}
+
+#[cfg(test)]
+mod challenge_tests {
+    use super::is_challenge;
+
+    #[test]
+    fn a_challenge_page_is_recognised_by_its_head() {
+        assert!(is_challenge(
+            "<html><head><title>Just a moment...</title></head>"
+        ));
+        assert!(is_challenge(
+            "<html><script>window._cf_chl_opt={cf-chl-tk}</script>"
+        ));
+    }
+
+    #[test]
+    fn a_page_that_only_mentions_the_marker_deep_inside_is_not_one() {
+        let page = format!(
+            "<html><head><title>Topic</title></head><body>{}<p>the cf-chl- cookie and 'Just a moment'</p>",
+            "x".repeat(6000)
+        );
+        assert!(!is_challenge(&page));
     }
 }

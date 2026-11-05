@@ -1,0 +1,41 @@
+pair	a	title_a	b	title_b	band	same_topic	silver_same_topic
+0	internals:21870	Add methods that return the number of bits necessary to represent an integer in binary to the standard library	internals:23031	Add bit_len() function	0.97		1
+1	internals:16655	Derive macros for Eq, Ord, PartialEq and PartialOrd makes unecessary restrictions	internals:21937	#[derive(All)]	0.86		1
+2	internals:17490	Typo in #guidelines #style	internals:46	About the style category	0.86		0
+3	internals:7783	[Pre-Pre-RFC] Reviving minimum Rust version (published as RFC 2495)	rfc:2495	2495-min-rust-version - The Rust RFC Book	0.97		1
+4	internals:3899	Idea: Security advisories as part of crates.io metadata	internals:9006	An idea to mitigate attacks through malicious crates	0.95		1
+5	internals:11614	Dyn pointer equality	internals:13152	Dynamic polymorphism – alternative designs discussion	0.86		1
+6	internals:23963	Pre-RFC: Rust Safety Standard	rfc:2316	2316-safe-unsafe-trait-methods - The Rust RFC Book	0.95		0
+7	internals:11920	Pre-RFC: #[repr(rust)] variadic functions	internals:8619	Variadic generics - pre-RFC	0.97		1
+8	internals:19096	Syntactic sugar for `if x { return | break | continue }`	internals:20429	Suffix conditionals	0.93		1
+9	internals:13777	BTreeMap::drain with a range	internals:15820	BTree{Map,Set} range removal	0.95		1
+10	internals:12407	Add non-`unsafe` `get_mut` for `UnsafeCell`	internals:19138	Why `UnsafeCell` doesn't implement `AsMut`	0.95		1
+11	internals:3745	Proposal: The Rust Platform	internals:7217	Focus of Rust evolution	0.95		0
+12	internals:20352	Seeking beta testers for Rustup 1.27.0	internals:20730	Seeking beta testers for Rustup v1.27.1	0.97		0
+13	internals:7776	Rust 2018: an early preview	internals:8218	Announcing Rust 2018 Preview 2!	0.97		1
+14	internals:11068	Docs.rs don't build docs for procedural macro	internals:4755	Rustdoc examples-as-tests in libstd - how to run?	0.86		0
+15	internals:17460	Why do we need two kinds of raw pointers?	internals:6127	What is the real difference between `*const T` and `*mut T` raw pointers?	0.97		1
+16	internals:22615	[Idea] Function trait impls	internals:6357	Delegate trait implementations with procedural macros	0.95		1
+17	internals:11659	Crate disambiguators and reproducibility	internals:12976	PR: Less dependency on correct mtimes	0.93		0
+18	internals:11127	Asynchronous Destructors	internals:20071	Pre-pre-pre-RFC: implicit code control and defer statements	0.93		0
+19	internals:10834	Update on Rust, crates.io, and US economic sanctions	internals:11533	“Rust’s freedom flaws”	0.93		0
+20	internals:1117	Call for consensus, if we do want rename `int/uint`	internals:1131	Restarting the `int/uint` Discussion	0.95		1
+21	internals:18577	Help verify rustup 1.26.0 release	internals:22060	Seeking beta testers for Rustup v1.28.0	0.95		0
+22	internals:19635	Ability to call unsafe functions without curly brackets	internals:23178	Pure annotation for stateless functions	0.93		0
+23	internals:10828	Pre-Pre-RFC: making `std`-dependent Cargo features a first-class concept	internals:13141	Pre-Pre-RFC: weak Cargo feature activation	0.97		1
+24	internals:10814	What numeric traits make sense for std?	internals:16449	Please can we add a basic num trait?	0.97		1
+25	internals:13144	Suggestion: Target-focused `unsafe` call	internals:23618	"""This code is unsound"" code block marker in rustdoc"	0.86		0
+26	internals:14688	Tuple Unpacking	internals:21732	Pre-RFC v2 - Static Function Argument Unpacking	0.93		1
+27	internals:18033	Did we start reviewing PRs slower?	internals:8954	Homu queue woes, and suggestions on how to fix them	0.86		0
+28	internals:11124	A new intrinsic: `can_panic_unwind`	internals:19911	Panic bounds in the type system level for guaranteeing panic-free code	0.95		1
+29	internals:11310	[Pre-RFC #2]: Inline assembly	internals:22545	How does inline assembly and the physical machine fit into the abstract machine model, or exist outside of it?	0.93		1
+30	internals:4042	How to find things in the codebase for a new Rust contributor	internals:8296	Can anyone please mentor me on Rust contribution?I can start with documentation...I need a guidance please	0.86		1
+31	internals:23184	{{post#0}}	internals:7951	Pre-RFC use function name as the type of the function	0.95		0
+32	internals:14138	Const generics and defaults	internals:15250	Next const generics stabilisation	0.93		1
+33	internals:22492	Support -Zremap-path-scope with different scopes	internals:9657	Tools Team: tell us your sorrows	0.86		0
+34	internals:21915	Killing `Ok(())` with `ok!()`	internals:9863	Implicit void result Ok(())	0.93		1
+35	internals:11743	Pre-RFC: Explicit enum variant visibility (`pub enum E { pub(self) V }`)	internals:12842	Concept RFC: Tuple Enums	0.93		0
+36	internals:6557	Pre-RFC: at most one repetition macro patterns	rfc:2298	2298-macro-at-most-once-rep - The Rust RFC Book	0.97		1
+37	internals:12157	`std::prelude::v2` with `TryFrom`/`TryInto` on edition 2021?	internals:17679	Crate local preludes	0.86		1
+38	internals:13879	[Analysis / Pre-RFC] Variadic generics in Rust	internals:8619	Variadic generics - pre-RFC	0.97		1
+39	internals:23857	Optimistic `cargo run` for faster compile/iteration times	internals:8954	Homu queue woes, and suggestions on how to fix them	0.86		0
