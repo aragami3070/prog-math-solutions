@@ -207,7 +207,9 @@ impl Builder {
         let index =
             Index::create_in_dir(&dir, schema).inspect_err(|_| drop(fs::remove_dir_all(&dir)))?;
         index.tokenizers().register(ANALYZER_NAME, analyzer());
-        let writer = index.writer_with_num_threads(2, WRITER_HEAP)?;
+        // One indexing thread: documents land in segments in insertion order, so equal scores
+        // keep the same order in every build of the same corpus (two threads made it vary).
+        let writer = index.writer_with_num_threads(1, WRITER_HEAP)?;
         Ok(Self {
             dir,
             generation,
