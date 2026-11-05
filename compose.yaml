@@ -22,6 +22,26 @@ services:
     volumes:
       - qdrant-data:/qdrant/storage
     profiles: ["vectors"]
+  # The application. Not started by default: `docker-compose --profile app up --build`.
+  # Host networking because the API only binds loopback addresses (a deliberate choice);
+  # it then reaches PostgreSQL and Qdrant on 127.0.0.1 and is itself on 127.0.0.1:8080.
+  # Untested: see the note at the top of the Dockerfile.
+  api:
+    build: .
+    network_mode: host
+    environment:
+      DATABASE_URL: postgres://rks:rks@127.0.0.1:5433/rks
+      HTTP_BIND: 127.0.0.1:8080
+      SEARCH_INDEX_DIR: /data/index
+      SEARCH_REFRESH_MINUTES: "30"
+      QDRANT_URL: http://127.0.0.1:6333
+    volumes:
+      - app-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["app"]
 volumes:
+  app-data:
   postgres-data:
   qdrant-data:
