@@ -268,7 +268,7 @@ pub async fn answer(
     let vector_order: Vec<String> = nearest.iter().map(|m| m.document_id.clone()).collect();
 
     let (mut lexical_hits, rewrite, order) = if mode == Mode::Hybrid {
-        let found = lexical(index.clone(), text, filters, 0, POOL).await;
+        let found = lexical(index.clone(), text.clone(), filters, 0, POOL).await;
         // A query the lexical side rejects (no searchable terms) still has a vector answer.
         let (hits, rewrite) = match found {
             Ok(found) => (found.hits, found.rewrite),
@@ -276,7 +276,16 @@ pub async fn answer(
             Err(error) => return Err(error),
         };
         let lexical_order: Vec<String> = hits.iter().map(|h| h.document_id.clone()).collect();
-        let fused = fuse(&[lexical_order, vector_order]);
+        let mut fused = fuse(&[lexical_order, vector_order]);
+        // A document the query names outright (`RFC 3058`) stays first: embeddings know
+        // nothing about numbers, and rank fusion would bury it.
+        let named: Vec<String> = super::query::exact_ids(&text)
+            .into_iter()
+            .filter(|id| hits.iter().any(|h| &h.document_id == id))
+            .collect();
+        fused.retain(|(id, _)| !named.contains(id));
+        let pinned = named.into_iter().map(|id| (id, 1.0));
+        fused = pinned.chain(fused).collect();
         (hits, rewrite, fused)
     } else {
         let order = vector_order

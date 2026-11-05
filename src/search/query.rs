@@ -254,7 +254,7 @@ fn filter(field: Field, value: &str) -> Box<dyn Query> {
 }
 
 /// Document IDs a query may be naming outright.
-fn exact_ids(text: &str) -> Vec<String> {
+pub(super) fn exact_ids(text: &str) -> Vec<String> {
     let lower = text.to_lowercase();
     if let Some((source, id)) = lower.split_once(':')
         && matches!(source, "rfc" | "internals")

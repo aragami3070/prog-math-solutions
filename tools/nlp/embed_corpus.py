@@ -11,6 +11,7 @@ Qdrant ids are stable (document id, ordinal), so a rerun overwrites instead of d
 The collection is rebuilt from scratch each run; the database stays the source of truth.
 """
 import argparse
+import os
 import hashlib
 import json
 import re
@@ -146,7 +147,7 @@ def main():
                 "built_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 "seconds": round(time.time() - started)}
     manifest["sha256"] = hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()
-    with open("data/vectors.json", "w") as f:
+    with open(os.path.join(os.path.dirname(__file__), "..", "..", "data", "vectors.json"), "w") as f:
         json.dump(manifest, f, indent=2)
     print(json.dumps(manifest, indent=2), file=sys.stderr)
 
