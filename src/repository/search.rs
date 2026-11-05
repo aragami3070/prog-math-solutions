@@ -11,7 +11,9 @@ pub fn documents<'a>(
         r#"
         SELECT
             id, source, native_id, canonical_url, title, body_text,
-            completeness AS "completeness!"
+            completeness AS "completeness!",
+            (SELECT EXTRACT(YEAR FROM p.published_at AT TIME ZONE 'UTC')::INT
+             FROM posts AS p WHERE p.document_id = documents.id AND p.post_number = 1) AS year
         FROM documents
         ORDER BY id
         "#,

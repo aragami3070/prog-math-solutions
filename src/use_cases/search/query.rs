@@ -46,6 +46,14 @@ pub async fn execute(
             ));
         }
     };
+    for year in [query.year_from, query.year_to].into_iter().flatten() {
+        if !(1990..=2100).contains(&year) {
+            return Err(Error::InvalidQuery("years must be 1990..2100"));
+        }
+    }
+    if query.year_from > query.year_to && query.year_to.is_some() {
+        return Err(Error::InvalidQuery("year_from is after year_to"));
+    }
     let index = handle.current().ok_or(Error::NotBuilt)?;
     if query
         .generation
@@ -59,6 +67,8 @@ pub async fn execute(
     let filters = Filters {
         source: request_source.clone(),
         complete_only: query.complete_only,
+        year_from: query.year_from,
+        year_to: query.year_to,
     };
     let options = Options {
         fuzzy: query.fuzzy,
@@ -90,6 +100,8 @@ pub async fn execute(
             lemmas: query.lemmas,
             source: request_source,
             complete_only: query.complete_only,
+            year_from: query.year_from,
+            year_to: query.year_to,
             lemmas_version: Lemmas::shared().map(|lemmas| lemmas.version.clone()),
             synonyms_version: SYNONYMS_VERSION,
             analyzer_version: ANALYZER_VERSION,

@@ -73,6 +73,14 @@ export function SearchPage() {
           </select>
         </label>
         <label>
+          Период, с{" "}
+          <input type="number" min={1990} max={2100} placeholder="год" style={{ width: "5em" }} value={params.year_from ?? ""} onChange={event => void navigate({ search: { ...params, year_from: event.target.value === "" ? undefined : Number(event.target.value), page: 1 } })} />
+        </label>
+        <label>
+          по{" "}
+          <input type="number" min={1990} max={2100} placeholder="год" style={{ width: "5em" }} value={params.year_to ?? ""} onChange={event => void navigate({ search: { ...params, year_to: event.target.value === "" ? undefined : Number(event.target.value), page: 1 } })} />
+        </label>
+        <label>
           <input type="checkbox" checked={params.complete_only} onChange={event => void navigate({ search: { ...params, complete_only: event.target.checked, page: 1 } })} />{" "}
           Только полные
         </label>

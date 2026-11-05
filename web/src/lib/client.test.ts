@@ -49,6 +49,8 @@ it("builds a search path with only the filters that are set", () => {
   expect(filtered.searchParams.get("source")).toBe("rfc");
   expect(filtered.searchParams.get("complete_only")).toBe("true");
   expect(new URL(searchPath({ ...params, mode: "hybrid" }), "http://localhost").searchParams.get("mode")).toBe("hybrid");
+  const period = new URL(searchPath({ ...params, year_from: 2019, year_to: 2020 }), "http://localhost");
+  expect([period.searchParams.get("year_from"), period.searchParams.get("year_to")]).toEqual(["2019", "2020"]);
 });
 
 it("validates search parameters from the URL", () => {
@@ -57,4 +59,7 @@ it("validates search parameters from the URL", () => {
   expect(searchParams({ q: "x", mode: "evil" }).mode).toBe("lexical");
   expect(searchParams({ q: "x", fuzzy: "false", synonyms: "false" })).toMatchObject({ fuzzy: false, synonyms: false });
   expect(searchParams({ q: "a".repeat(500) }).q).toHaveLength(200);
+  expect(searchParams({ q: "x", year_from: "2019", year_to: "2020" })).toMatchObject({ year_from: 2019, year_to: 2020 });
+  expect(searchParams({ q: "x", year_from: "1800", year_to: "abc" })).not.toHaveProperty("year_from");
+  expect(searchParams({ q: "x", year_to: "abc" })).not.toHaveProperty("year_to");
 });

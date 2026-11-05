@@ -137,6 +137,16 @@ impl Semantic {
         if filters.complete_only {
             must.push(serde_json::json!({"key": "completeness", "match": {"value": "complete"}}));
         }
+        if filters.year_from.is_some() || filters.year_to.is_some() {
+            let mut range = serde_json::Map::new();
+            if let Some(from) = filters.year_from {
+                range.insert("gte".into(), from.into());
+            }
+            if let Some(to) = filters.year_to {
+                range.insert("lte".into(), to.into());
+            }
+            must.push(serde_json::json!({"key": "year", "range": range}));
+        }
         let response = self
             .http
             .post(format!(

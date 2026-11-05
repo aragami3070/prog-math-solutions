@@ -146,6 +146,7 @@ async fn run(options: &HashMap<String, String>) -> Result<()> {
         let filters = Filters {
             source: query.filters.source.clone(),
             complete_only: query.filters.complete_only,
+            ..Filters::default()
         };
         let found = answer(
             &semantic,

@@ -14,6 +14,11 @@ pub struct SearchQuery {
     /// Only documents whose every page was collected.
     #[serde(default)]
     pub complete_only: bool,
+    /// Only topics whose first post is from this year or later (1990..2100). Documents without
+    /// a date (all RFCs) are left out whenever a year bound is given.
+    pub year_from: Option<i32>,
+    /// Only topics whose first post is from this year or earlier.
+    pub year_to: Option<i32>,
     /// `lexical` (default), `vector` (embeddings in Qdrant) or `hybrid` (both, fused by RRF).
     /// If the vector side is down the answer is lexical and `scope.degraded` says why.
     #[serde(default)]
@@ -64,6 +69,8 @@ pub struct SearchScope {
     pub synonyms: bool,
     pub source: Option<String>,
     pub complete_only: bool,
+    pub year_from: Option<i32>,
+    pub year_to: Option<i32>,
     pub synonyms_version: &'static str,
     pub lemmas: bool,
     /// Version of the lemma table when one is loaded; `null` when the mode cannot run.
@@ -108,4 +115,5 @@ pub struct IndexRow {
     pub title: String,
     pub body_text: String,
     pub completeness: String,
+    pub year: Option<i32>,
 }

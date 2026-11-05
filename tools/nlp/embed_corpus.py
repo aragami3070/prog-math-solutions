@@ -9,6 +9,7 @@ meaning). Only the first MAX_CHUNKS chunks of a document are embedded: this boun
 small machine, and it is a stated limit, not a silent one (see data/vectors.json).
 Qdrant ids are stable (document id, ordinal), so a rerun overwrites instead of duplicating.
 The collection is rebuilt from scratch each run; the database stays the source of truth.
+Run tools/nlp/set_year.py afterwards: the period filter needs the `year` payload.
 """
 import argparse
 import os

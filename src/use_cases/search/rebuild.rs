@@ -29,6 +29,7 @@ pub async fn execute(
             title,
             body: row.body_text,
             completeness: row.completeness,
+            year: row.year,
         })?;
     }
     drop(rows);

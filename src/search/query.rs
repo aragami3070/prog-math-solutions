@@ -3,10 +3,13 @@ use super::{
     rewrite::{Options, REWRITE_BOOST, Rewrite},
 };
 use serde::Serialize;
+use std::ops::Bound;
 use tantivy::{
     TantivyDocument, Term,
     collector::{Count, TopDocs},
-    query::{BooleanQuery, BoostQuery, ConstScoreQuery, Occur, PhraseQuery, Query, TermQuery},
+    query::{
+        BooleanQuery, BoostQuery, ConstScoreQuery, Occur, PhraseQuery, Query, RangeQuery, TermQuery,
+    },
     schema::{Field, IndexRecordOption, Value},
     snippet::SnippetGenerator,
 };
@@ -25,6 +28,9 @@ const SNIPPET_CHARS: usize = 240;
 pub struct Filters {
     pub source: Option<String>,
     pub complete_only: bool,
+    /// Year of the first post, inclusive bounds. Documents without a date never match.
+    pub year_from: Option<i32>,
+    pub year_to: Option<i32>,
 }
 
 /// A piece of the snippet; `matched` parts are what the query found. Plain text, never HTML.
@@ -221,6 +227,20 @@ impl SearchIndex {
         }
         if filters.complete_only {
             must.push((Occur::Must, filter(f.completeness, "complete")));
+        }
+        if filters.year_from.is_some() || filters.year_to.is_some() {
+            let bound = |year: Option<i32>| {
+                year.map_or(Bound::Unbounded, |y| {
+                    Bound::Included(Term::from_field_i64(f.year, i64::from(y)))
+                })
+            };
+            must.push((
+                Occur::Must,
+                Box::new(RangeQuery::new(
+                    bound(filters.year_from),
+                    bound(filters.year_to),
+                )),
+            ));
         }
         Ok((Box::new(BooleanQuery::new(must)), rewrite))
     }

@@ -9,10 +9,13 @@ use std::{
 use tantivy::{
     Index, IndexReader, IndexWriter, ReloadPolicy, TantivyDocument,
     schema::{
-        Field, IndexRecordOption, STORED, STRING, Schema, TextFieldIndexing, TextOptions, Value,
+        Field, INDEXED, IndexRecordOption, STORED, STRING, Schema, TextFieldIndexing, TextOptions,
+        Value,
     },
 };
 
+/// Bumped when a field is added or changed (2: `year`).
+const SCHEMA_VERSION: u32 = 2;
 const CURRENT: &str = "CURRENT";
 const MANIFEST: &str = "manifest.json";
 const WRITER_HEAP: usize = 100_000_000;
@@ -33,6 +36,8 @@ pub enum Error {
     Json(#[from] serde_json::Error),
     #[error("index was built with analyzer {found}, this build uses {ANALYZER_VERSION}")]
     AnalyzerMismatch { found: String },
+    #[error("index has layout {found}, this build uses {SCHEMA_VERSION}; rebuild it")]
+    SchemaMismatch { found: u32 },
 }
 
 #[derive(Clone, Copy)]
@@ -44,6 +49,8 @@ pub struct Fields {
     pub title: Field,
     pub body: Field,
     pub completeness: Field,
+    /// Year of the first post (UTC); absent for documents without a date (every RFC).
+    pub year: Field,
 }
 
 fn schema() -> (Schema, Fields) {
@@ -64,6 +71,7 @@ fn schema() -> (Schema, Fields) {
         title: builder.add_text_field("title", text.clone()),
         body: builder.add_text_field("body", text),
         completeness: builder.add_text_field("completeness", STRING | STORED),
+        year: builder.add_i64_field("year", INDEXED),
     };
     (builder.build(), fields)
 }
@@ -77,11 +85,19 @@ pub struct IndexDocument {
     pub title: String,
     pub body: String,
     pub completeness: String,
+    pub year: Option<i32>,
+}
+
+fn first_schema() -> u32 {
+    1
 }
 
 #[derive(Serialize, Deserialize)]
 struct Manifest {
     analyzer_version: String,
+    /// Layout of the index fields; an older generation cannot answer the current queries.
+    #[serde(default = "first_schema")]
+    schema_version: u32,
     documents: u64,
     built_at: String,
     /// Fingerprint of the corpus the generation was built from; older manifests have none.
@@ -106,6 +122,11 @@ impl SearchIndex {
         if manifest.analyzer_version != ANALYZER_VERSION {
             return Err(Error::AnalyzerMismatch {
                 found: manifest.analyzer_version,
+            });
+        }
+        if manifest.schema_version != SCHEMA_VERSION {
+            return Err(Error::SchemaMismatch {
+                found: manifest.schema_version,
             });
         }
         Self::from_index(
@@ -213,6 +234,9 @@ impl Builder {
         document.add_text(f.title, doc.title);
         document.add_text(f.body, doc.body);
         document.add_text(f.completeness, doc.completeness);
+        if let Some(year) = doc.year {
+            document.add_i64(f.year, i64::from(year));
+        }
         self.writer
             .as_mut()
             .expect("the writer lives until finish")
@@ -228,6 +252,7 @@ impl Builder {
         writer.wait_merging_threads()?;
         let manifest = Manifest {
             analyzer_version: ANALYZER_VERSION.into(),
+            schema_version: SCHEMA_VERSION,
             documents: self.documents,
             built_at: chrono::Utc::now().to_rfc3339(),
             corpus_marker: self.marker.clone(),

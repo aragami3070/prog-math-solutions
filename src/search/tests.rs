@@ -14,6 +14,8 @@ fn doc(id: i64, source: &str, native_id: &str, title: &str, body: &str) -> Index
         title: title.into(),
         body: body.into(),
         completeness: if id % 2 == 0 { "partial" } else { "complete" }.into(),
+        // Internals topics carry the year of their first post; RFCs have no date.
+        year: (source == "internals").then(|| 2012 + id as i32 * 2),
     }
 }
 
@@ -119,6 +121,36 @@ fn phrases_use_positions_not_just_word_presence() {
 }
 
 #[test]
+fn a_period_keeps_dated_documents_inside_it_and_drops_undated_ones() {
+    let (_dir, _handle, index) = fixture();
+    let ids = |from, to| {
+        let filters = Filters {
+            year_from: from,
+            year_to: to,
+            ..Filters::default()
+        };
+        let mut found: Vec<String> = index
+            .search("async", &filters, Options::default(), 0, 10)
+            .unwrap()
+            .hits
+            .into_iter()
+            .map(|hit| hit.document_id)
+            .collect();
+        found.sort();
+        found
+    };
+    // "async" matches rfc:2394 (undated), internals:200 (2022), internals:300 (2024).
+    assert_eq!(ids(None, None).len(), 3);
+    assert_eq!(ids(Some(2023), None), ["internals:300"]);
+    assert_eq!(ids(None, Some(2022)), ["internals:200"]);
+    assert_eq!(
+        ids(Some(2022), Some(2024)),
+        ["internals:200", "internals:300"]
+    );
+    assert!(ids(Some(2030), None).is_empty());
+}
+
+#[test]
 fn filters_narrow_matches_and_total_counts_all_of_them() {
     let (_dir, _handle, index) = fixture();
     let all = index
@@ -128,7 +160,7 @@ fn filters_narrow_matches_and_total_counts_all_of_them() {
     assert_eq!(all.hits.len(), 1);
     let internals = Filters {
         source: Some("internals".into()),
-        complete_only: false,
+        ..Filters::default()
     };
     let hits = index
         .search("async", &internals, Options::default(), 0, 10)
@@ -136,8 +168,8 @@ fn filters_narrow_matches_and_total_counts_all_of_them() {
     assert!(hits.hits.iter().all(|hit| hit.source == "internals"));
     assert_eq!(hits.total, 2);
     let complete = Filters {
-        source: None,
         complete_only: true,
+        ..Filters::default()
     };
     let hits = index
         .search("async", &complete, Options::default(), 0, 10)
