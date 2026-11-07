@@ -11,10 +11,13 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use utoipa::ToSchema;
 
 const COLLECTION: &str = "rks_chunks_v1";
-/// Candidates taken from each ranking before fusion; hybrid pages are cut from this pool.
+/// Candidates taken from each ranking before fusion when the request does not say; hybrid pages
+/// are cut from this pool. The client may ask for `MIN_POOL..=MAX_POOL`.
 pub const POOL: usize = 100;
-/// Chunks fetched to find `POOL` distinct documents (several chunks of one document collapse).
-const CHUNK_LIMIT: usize = 300;
+pub const MIN_POOL: usize = 10;
+pub const MAX_POOL: usize = 500;
+/// Chunks fetched per wanted document: several chunks of one document collapse into one.
+const CHUNKS_PER_DOCUMENT: usize = 3;
 /// Standard RRF damping constant.
 const RRF_K: f32 = 60.0;
 
@@ -128,6 +131,7 @@ impl Semantic {
         &self,
         text: &str,
         filters: &Filters,
+        pool: usize,
     ) -> Result<Vec<DocumentMatch>, String> {
         let vector = self.embed_query(text).await?;
         let mut must = Vec::new();
@@ -155,7 +159,7 @@ impl Semantic {
             ))
             .json(&serde_json::json!({
                 "vector": vector,
-                "limit": CHUNK_LIMIT,
+                "limit": pool * CHUNKS_PER_DOCUMENT,
                 "with_payload": true,
                 "filter": {"must": must},
             }))
@@ -178,7 +182,7 @@ impl Semantic {
                     score: point.score,
                     chunk: point.payload.text,
                 });
-                if documents.len() == POOL {
+                if documents.len() == pool {
                     break;
                 }
             }
@@ -219,6 +223,8 @@ pub struct Request {
     pub filters: Filters,
     pub options: Options,
     pub mode: Mode,
+    /// Candidates taken from each ranking (vector and hybrid); `MIN_POOL..=MAX_POOL`.
+    pub pool: usize,
     pub offset: usize,
     pub limit: usize,
 }
@@ -233,6 +239,7 @@ pub async fn answer(
         filters,
         options,
         mode,
+        pool,
         offset,
         limit,
     } = request;
@@ -251,12 +258,12 @@ pub async fn answer(
             degraded: None,
         });
     }
-    if offset + limit > POOL {
+    if offset + limit > pool {
         return Err(Error::InvalidQuery(
-            "vector and hybrid results are limited to the first 100",
+            "vector and hybrid results are limited to the candidate pool (parameter pool)",
         ));
     }
-    let nearest = match semantic.nearest(&text, &filters).await {
+    let nearest = match semantic.nearest(&text, &filters, pool).await {
         Ok(nearest) => nearest,
         Err(reason) => {
             // Degrade, never fail: the lexical ranking still answers.
@@ -278,7 +285,7 @@ pub async fn answer(
     let vector_order: Vec<String> = nearest.iter().map(|m| m.document_id.clone()).collect();
 
     let (mut lexical_hits, rewrite, order) = if mode == Mode::Hybrid {
-        let found = lexical(index.clone(), text.clone(), filters, 0, POOL).await;
+        let found = lexical(index.clone(), text.clone(), filters, 0, pool).await;
         // A query the lexical side rejects (no searchable terms) still has a vector answer.
         let (hits, rewrite) = match found {
             Ok(found) => (found.hits, found.rewrite),

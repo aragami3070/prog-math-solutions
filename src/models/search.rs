@@ -23,6 +23,10 @@ pub struct SearchQuery {
     /// If the vector side is down the answer is lexical and `scope.degraded` says why.
     #[serde(default)]
     pub mode: Mode,
+    /// Vector and hybrid only: how many candidates each ranking contributes (10..500, default
+    /// 100). Results cannot be paged deeper than this, and `total` is this pool, not a count of
+    /// matching documents. Larger pools reach further down the ranking and cost more per query.
+    pub pool: Option<u32>,
     /// Repair misspelled words against the corpus vocabulary (adds lower-weight branches).
     #[serde(default)]
     pub fuzzy: bool,
@@ -71,6 +75,8 @@ pub struct SearchScope {
     /// `total` counts every matching document (lexical) or only the candidate pool (vector,
     /// hybrid: at most 100).
     pub total_is_pool: bool,
+    /// The candidate pool used by vector and hybrid modes.
+    pub pool: u32,
     pub fuzzy: bool,
     pub fuzzy_match: bool,
     pub synonyms: bool,

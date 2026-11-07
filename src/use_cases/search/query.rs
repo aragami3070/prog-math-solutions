@@ -9,7 +9,7 @@ use crate::{
     search::{
         ANALYZER_VERSION, Filters, Lemmas, Options, SYNONYMS_VERSION, SearchHandle,
         query::MAX_DEPTH,
-        semantic::{Request, Semantic, answer},
+        semantic::{MAX_POOL, MIN_POOL, POOL, Request, Semantic, answer},
     },
 };
 use std::time::Instant;
@@ -32,6 +32,7 @@ pub async fn execute(
         Some(session) if valid_session(session) => {
             let variant = EXPERIMENT.assign(session);
             query.mode = variant.mode;
+            query.pool = None;
             (query.fuzzy, query.fuzzy_match, query.synonyms, query.lemmas) =
                 (false, false, false, false);
             Some(ExperimentInfo {
@@ -47,6 +48,14 @@ pub async fn execute(
             ));
         }
     };
+    let pool = query.pool.map_or(Ok(POOL), |pool| {
+        let pool = pool as usize;
+        if (MIN_POOL..=MAX_POOL).contains(&pool) {
+            Ok(pool)
+        } else {
+            Err(Error::InvalidQuery("pool must be 10..500"))
+        }
+    })?;
     for year in [query.year_from, query.year_to].into_iter().flatten() {
         if !(1990..=2100).contains(&year) {
             return Err(Error::InvalidQuery("years must be 1990..2100"));
@@ -82,6 +91,7 @@ pub async fn execute(
         filters,
         options,
         mode: query.mode,
+        pool,
         offset: pagination.offset() as usize,
         limit: query.page_size as usize,
     };
@@ -97,6 +107,7 @@ pub async fn execute(
             requested_mode: query.mode.as_str(),
             degraded: found.degraded,
             total_is_pool: found.total_is_pool,
+            pool: pool as u32,
             fuzzy: query.fuzzy,
             fuzzy_match: query.fuzzy_match,
             synonyms: query.synonyms,

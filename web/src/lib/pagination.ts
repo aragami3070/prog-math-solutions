@@ -10,6 +10,9 @@ export function pagination(search: Record<string, unknown>) {
   };
 }
 
+/** Candidate pool sizes offered for the vector and hybrid modes; the server default is 100. */
+export const POOL_SIZES = [50, 100, 200, 300, 500];
+
 export type SearchMode = "lexical" | "vector" | "hybrid";
 
 export interface SearchParams {
@@ -26,6 +29,8 @@ export interface SearchParams {
   /** Year of the first post, inclusive; RFCs have no date and are left out when a bound is set. */
   year_from?: number;
   year_to?: number;
+  /** Candidates per ranking in vector and hybrid modes; omitted means the server default. */
+  pool?: number;
   page: number;
 }
 
@@ -48,12 +53,13 @@ export function searchParams(search: Record<string, unknown>): SearchParams {
     mode: search.mode === "vector" || search.mode === "hybrid" ? search.mode : "lexical",
     ...(year(search.year_from) !== undefined && { year_from: year(search.year_from) }),
     ...(year(search.year_to) !== undefined && { year_to: year(search.year_to) }),
+    ...(POOL_SIZES.includes(Number(search.pool)) && { pool: Number(search.pool) }),
     page: Number.isInteger(page) && page >= 1 && page <= 1_000_000 ? page : 1,
   };
 }
 
 /** The API path for a search; `page_size` is fixed. */
-export function searchPath({ q, source, complete_only, fuzzy, synonyms, lemmas, fuzzy_match, mode, year_from, year_to, page }: SearchParams, pageSize = 20) {
+export function searchPath({ q, source, complete_only, fuzzy, synonyms, lemmas, fuzzy_match, mode, year_from, year_to, pool, page }: SearchParams, pageSize = 20) {
   const query = new URLSearchParams({ q, page: String(page), page_size: String(pageSize) });
   if (source) query.set("source", source);
   if (complete_only) query.set("complete_only", "true");
@@ -64,5 +70,6 @@ export function searchPath({ q, source, complete_only, fuzzy, synonyms, lemmas, 
   if (mode !== "lexical") query.set("mode", mode);
   if (year_from !== undefined) query.set("year_from", String(year_from));
   if (year_to !== undefined) query.set("year_to", String(year_to));
+  if (pool !== undefined && mode !== "lexical") query.set("pool", String(pool));
   return `/api/search?${query}`;
 }

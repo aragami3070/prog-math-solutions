@@ -7,7 +7,7 @@ import { PageHeading } from "../../components/PageHeading";
 import { Pagination } from "../../components/Pagination";
 import { get, rebuildSearchIndex } from "../../lib/client";
 import { number } from "../../lib/format";
-import { searchPath } from "../../lib/pagination";
+import { POOL_SIZES, searchPath } from "../../lib/pagination";
 import { SOURCES } from "../../lib/sources";
 import type { SearchResults } from "../../lib/types";
 
@@ -80,6 +80,14 @@ export function SearchPage() {
           по{" "}
           <input type="number" min={1990} max={2100} placeholder="год" style={{ width: "5em" }} value={params.year_to ?? ""} onChange={event => void navigate({ search: { ...params, year_to: event.target.value === "" ? undefined : Number(event.target.value), page: 1 } })} />
         </label>
+        {params.mode !== "lexical" && (
+          <label title="Сколько кандидатов даёт каждый список (векторный и лексический). Глубже этого число результатов не листается; больше пул — дальше по выдаче и дороже запрос.">
+            Пул кандидатов{" "}
+            <select value={params.pool ?? 100} onChange={event => void navigate({ search: { ...params, pool: Number(event.target.value), page: 1 } })}>
+              {POOL_SIZES.map(size => <option key={size} value={size}>{size}</option>)}
+            </select>
+          </label>
+        )}
         <label>
           <input type="checkbox" checked={params.complete_only} onChange={event => void navigate({ search: { ...params, complete_only: event.target.checked, page: 1 } })} />{" "}
           Только полные

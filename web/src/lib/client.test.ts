@@ -50,6 +50,10 @@ it("builds a search path with only the filters that are set", () => {
   expect(filtered.searchParams.get("complete_only")).toBe("true");
   expect(new URL(searchPath({ ...params, mode: "hybrid" }), "http://localhost").searchParams.get("mode")).toBe("hybrid");
   expect(new URL(searchPath({ ...params, fuzzy_match: true }), "http://localhost").searchParams.get("fuzzy_match")).toBe("true");
+  const pooled = (mode: "lexical" | "vector") => new URL(searchPath({ ...params, mode, pool: 300 }), "http://localhost").searchParams.get("pool");
+  expect([pooled("vector"), pooled("lexical")]).toEqual(["300", null]);
+  expect(searchParams({ q: "x", pool: "300" }).pool).toBe(300);
+  expect(searchParams({ q: "x", pool: "7" }).pool).toBeUndefined();
   const period = new URL(searchPath({ ...params, year_from: 2019, year_to: 2020 }), "http://localhost");
   expect([period.searchParams.get("year_from"), period.searchParams.get("year_to")]).toEqual(["2019", "2020"]);
 });

@@ -19,7 +19,7 @@ use rust_knowledge::{
     experiment::{EXPERIMENT, analysis, simulate},
     search::{
         ANALYZER_VERSION, Filters, Lemmas, Options, SYNONYMS_VERSION, SearchHandle,
-        semantic::{Mode, Request, Semantic, answer},
+        semantic::{Mode, POOL, Request, Semantic, answer},
     },
     use_cases::search::rebuild,
 };
@@ -157,6 +157,7 @@ async fn run(options: &HashMap<String, String>) -> Result<()> {
                 filters,
                 options: rewriting,
                 mode,
+                pool: POOL,
                 offset: 0,
                 limit: DEPTH,
             },

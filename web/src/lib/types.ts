@@ -95,6 +95,7 @@ export interface SearchResults {
     requested_mode: string;
     degraded: string | null;
     total_is_pool: boolean;
+    pool: number;
     lemmas: boolean;
     lemmas_version: string | null;
     fuzzy: boolean;

@@ -515,6 +515,7 @@ async fn vector_modes_degrade_to_lexical_and_say_why() {
                 filters: Filters::default(),
                 options: Options::default(),
                 mode,
+                pool: 100,
                 offset: 0,
                 limit: 10,
             },
