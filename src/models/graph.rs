@@ -78,6 +78,52 @@ pub struct GraphRebuild {
     pub took_ms: u64,
 }
 
+/// A node of the whole-graph view: a document that has at least one reference edge.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OverviewNode {
+    pub id: String,
+    pub source: String,
+    pub title: String,
+    pub url: String,
+    pub completeness: String,
+    /// Edges touching the node, both directions.
+    pub degree: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OverviewEdge {
+    pub source: String,
+    pub target: String,
+    pub occurrences: i32,
+}
+
+/// The whole reference graph for a force-directed view: only documents that have edges.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct GraphOverview {
+    pub nodes: Vec<OverviewNode>,
+    pub edges: Vec<OverviewEdge>,
+    pub built_at: Option<DateTime<Utc>>,
+    /// More linked documents existed than the node cap; the most-linked were kept.
+    pub truncated: bool,
+}
+
+/// A linked document with its degree.
+pub struct OverviewNodeRow {
+    pub id: i64,
+    pub source: String,
+    pub native_id: String,
+    pub title: String,
+    pub canonical_url: String,
+    pub completeness: String,
+    pub degree: i64,
+}
+
+pub struct OverviewEdgeRow {
+    pub source_id: i64,
+    pub target_id: i64,
+    pub occurrences: i32,
+}
+
 /// A document's identity and card fields.
 pub struct NodeRow {
     pub id: i64,

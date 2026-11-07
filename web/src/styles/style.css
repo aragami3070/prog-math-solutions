@@ -99,3 +99,16 @@ details p { max-width: 250px; overflow-wrap: anywhere; }
 .search-form input[type="search"] { flex: 1 1 320px; min-width: 0; padding: 11px 14px; font: inherit; border: 1px solid #dce2d5; border-radius: 8px; background: #fff; }
 .search-form input[type="checkbox"] { accent-color: #657d40; }
 mark { background: #e9efd3; color: inherit; border-radius: 3px; padding: 0 2px; }
+
+.graph-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; margin: 16px 0; }
+.graph-canvas { width: 100%; height: 70vh; min-height: 420px; background: #fbfcf9; border: 1px solid #dbe1d3; border-radius: 8px; cursor: grab; touch-action: none; display: block; }
+.graph-panel { border: 1px solid #dbe1d3; background: #fff; border-radius: 8px; padding: 16px; font-size: 13px; max-height: 70vh; overflow: auto; }
+.graph-panel h2 { font-size: 16px; margin: 8px 0; }
+.graph-panel h3 { font-size: 12px; margin: 14px 0 4px; color: #727b6c; text-transform: uppercase; letter-spacing: .04em; }
+.graph-panel ul, .graph-matches { list-style: none; margin: 0; padding: 0; }
+.graph-panel li button, .graph-matches button { all: unset; cursor: pointer; display: block; width: 100%; padding: 4px 0; color: #263d2e; }
+.graph-panel li button:hover, .graph-matches button:hover { text-decoration: underline; }
+.graph-matches { border: 1px solid #dbe1d3; border-radius: 8px; background: #fff; padding: 4px 12px; margin: -8px 0 12px; font-size: 13px; }
+.graph-legend { display: flex; gap: 14px; align-items: center; }
+.graph-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
+@media (max-width: 900px) { .graph-layout { grid-template-columns: 1fr; } .graph-panel { max-height: none; } }

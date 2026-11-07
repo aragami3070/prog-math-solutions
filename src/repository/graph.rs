@@ -1,4 +1,4 @@
-use crate::models::graph::{EdgeRow, NodeRow};
+use crate::models::graph::{EdgeRow, NodeRow, OverviewEdgeRow, OverviewNodeRow};
 use chrono::{DateTime, Utc};
 use sqlx::{Postgres, Transaction};
 
@@ -95,4 +95,50 @@ pub async fn built_at(
     sqlx::query_scalar!(r#"SELECT MAX(built_at) FROM edges"#)
         .fetch_one(&mut **tx)
         .await
+}
+
+/// Documents that have at least one reference edge, most-linked first, at most `limit`.
+pub async fn overview_nodes(
+    tx: &mut Transaction<'_, Postgres>,
+    limit: i64,
+) -> Result<Vec<OverviewNodeRow>, sqlx::Error> {
+    sqlx::query_as!(
+        OverviewNodeRow,
+        r#"
+        WITH ends AS (
+            SELECT source_id AS id FROM edges WHERE kind = 'references'
+            UNION ALL
+            SELECT target_id FROM edges WHERE kind = 'references'
+        ), degrees AS (
+            SELECT id, COUNT(*) AS degree FROM ends GROUP BY id
+        )
+        SELECT d.id, d.source, d.native_id, d.title, d.canonical_url,
+               d.completeness AS "completeness!", g.degree AS "degree!"
+        FROM degrees g JOIN documents d ON d.id = g.id
+        ORDER BY g.degree DESC, d.id
+        LIMIT $1
+        "#,
+        limit
+    )
+    .fetch_all(&mut **tx)
+    .await
+}
+
+/// Edges whose both ends are among `ids`.
+pub async fn overview_edges(
+    tx: &mut Transaction<'_, Postgres>,
+    ids: &[i64],
+) -> Result<Vec<OverviewEdgeRow>, sqlx::Error> {
+    sqlx::query_as!(
+        OverviewEdgeRow,
+        r#"
+        SELECT source_id, target_id, occurrences
+        FROM edges
+        WHERE kind = 'references' AND source_id = ANY($1) AND target_id = ANY($1)
+        ORDER BY id
+        "#,
+        ids
+    )
+    .fetch_all(&mut **tx)
+    .await
 }

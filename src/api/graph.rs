@@ -3,7 +3,7 @@ use super::{
     errors::{Error, ErrorBody},
 };
 use crate::{
-    models::graph::{Graph, GraphQuery, GraphRebuild},
+    models::graph::{Graph, GraphOverview, GraphQuery, GraphRebuild},
     use_cases::graph,
 };
 use axum::{
@@ -16,6 +16,7 @@ use axum::{
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/graph", get(neighbors))
+        .route("/graph/overview", get(overview))
         .route("/graph/rebuild", post(rebuild))
 }
 
@@ -42,6 +43,22 @@ pub async fn neighbors(
         .begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY")
         .await?;
     let graph = graph::neighbors::execute(&mut tx, query).await?;
+    tx.commit().await?;
+    Ok(Json(graph))
+}
+
+/// The whole reference graph: every document with at least one edge, and the edges between them.
+#[utoipa::path(
+    get,
+    path = "/api/graph/overview",
+    responses((status = 200, body = GraphOverview)),
+)]
+pub async fn overview(State(state): State<AppState>) -> Result<Json<GraphOverview>, Error> {
+    let mut tx = state
+        .pool
+        .begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+        .await?;
+    let graph = graph::overview::execute(&mut tx).await?;
     tx.commit().await?;
     Ok(Json(graph))
 }

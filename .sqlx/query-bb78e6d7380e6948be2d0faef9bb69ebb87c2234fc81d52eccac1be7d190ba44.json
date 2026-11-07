@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH ends AS (\n            SELECT source_id AS id FROM edges WHERE kind = 'references'\n            UNION ALL\n            SELECT target_id FROM edges WHERE kind = 'references'\n        ), degrees AS (\n            SELECT id, COUNT(*) AS degree FROM ends GROUP BY id\n        )\n        SELECT d.id, d.source, d.native_id, d.title, d.canonical_url,\n               d.completeness AS \"completeness!\", g.degree AS \"degree!\"\n        FROM degrees g JOIN documents d ON d.id = g.id\n        ORDER BY g.degree DESC, d.id\n        LIMIT $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "native_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "canonical_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "completeness!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "degree!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "bb78e6d7380e6948be2d0faef9bb69ebb87c2234fc81d52eccac1be7d190ba44"
+}

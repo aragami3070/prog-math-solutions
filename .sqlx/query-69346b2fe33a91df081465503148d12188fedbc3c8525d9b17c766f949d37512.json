@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT source_id, target_id, occurrences\n        FROM edges\n        WHERE kind = 'references' AND source_id = ANY($1) AND target_id = ANY($1)\n        ORDER BY id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "target_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "occurrences",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8Array"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "69346b2fe33a91df081465503148d12188fedbc3c8525d9b17c766f949d37512"
+}

@@ -142,3 +142,25 @@ export interface Graph {
   total_edges: number;
   limits: { nodes: number };
 }
+
+export interface OverviewNode {
+  id: string;
+  source: SourceId;
+  title: string;
+  url: string;
+  completeness: Completeness;
+  degree: number;
+}
+
+export interface OverviewEdge {
+  source: string;
+  target: string;
+  occurrences: number;
+}
+
+export interface GraphOverview {
+  nodes: OverviewNode[];
+  edges: OverviewEdge[];
+  built_at: string | null;
+  truncated: boolean;
+}
