@@ -88,6 +88,10 @@ export function SearchPage() {
           <input type="checkbox" checked={params.fuzzy} onChange={event => void navigate({ search: { ...params, fuzzy: event.target.checked, page: 1 } })} />{" "}
           Исправлять опечатки
         </label>
+        <label title="Каждое слово запроса находит и близкие слова в индексе (расстояние правки 1–2, Tantivy FuzzyTermQuery); запрос не переписывается">
+          <input type="checkbox" checked={params.fuzzy_match} onChange={event => void navigate({ search: { ...params, fuzzy_match: event.target.checked, page: 1 } })} />{" "}
+          Нечёткое совпадение
+        </label>
         <label>
           <input type="checkbox" checked={params.synonyms} onChange={event => void navigate({ search: { ...params, synonyms: event.target.checked, page: 1 } })} />{" "}
           Синонимы

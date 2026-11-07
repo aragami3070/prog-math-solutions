@@ -32,7 +32,8 @@ pub async fn execute(
         Some(session) if valid_session(session) => {
             let variant = EXPERIMENT.assign(session);
             query.mode = variant.mode;
-            (query.fuzzy, query.synonyms, query.lemmas) = (false, false, false);
+            (query.fuzzy, query.fuzzy_match, query.synonyms, query.lemmas) =
+                (false, false, false, false);
             Some(ExperimentInfo {
                 id: EXPERIMENT.id,
                 version: EXPERIMENT.version,
@@ -72,6 +73,7 @@ pub async fn execute(
     };
     let options = Options {
         fuzzy: query.fuzzy,
+        fuzzy_match: query.fuzzy_match,
         synonyms: query.synonyms,
         lemmas: query.lemmas,
     };
@@ -96,6 +98,7 @@ pub async fn execute(
             degraded: found.degraded,
             total_is_pool: found.total_is_pool,
             fuzzy: query.fuzzy,
+            fuzzy_match: query.fuzzy_match,
             synonyms: query.synonyms,
             lemmas: query.lemmas,
             source: request_source,

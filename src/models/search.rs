@@ -26,6 +26,12 @@ pub struct SearchQuery {
     /// Repair misspelled words against the corpus vocabulary (adds lower-weight branches).
     #[serde(default)]
     pub fuzzy: bool,
+    /// Fuzzy matching inside the index (Tantivy `FuzzyTermQuery`): each query word also finds
+    /// indexed words within an edit distance (1 for words up to 5 letters, else 2; words under 4
+    /// letters and identifiers with digits stay exact). The query is not rewritten; exact hits
+    /// rank above near ones.
+    #[serde(default)]
+    pub fuzzy_match: bool,
     /// Expand abbreviations and aliases from the curated synonym table.
     #[serde(default)]
     pub synonyms: bool,
@@ -66,6 +72,7 @@ pub struct SearchScope {
     /// hybrid: at most 100).
     pub total_is_pool: bool,
     pub fuzzy: bool,
+    pub fuzzy_match: bool,
     pub synonyms: bool,
     pub source: Option<String>,
     pub complete_only: bool,

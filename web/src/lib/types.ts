@@ -98,6 +98,7 @@ export interface SearchResults {
     lemmas: boolean;
     lemmas_version: string | null;
     fuzzy: boolean;
+    fuzzy_match: boolean;
     synonyms: boolean;
     synonyms_version: string;
     analyzer_version: string;

@@ -362,6 +362,7 @@ fn a_typo_finds_nothing_unless_repair_is_on_and_the_repair_is_reported() {
             fuzzy: true,
             synonyms: false,
             lemmas: false,
+            ..Options::default()
         },
     );
     assert!(!found.hits.is_empty());
@@ -375,6 +376,49 @@ fn a_typo_finds_nothing_unless_repair_is_on_and_the_repair_is_reported() {
     assert_eq!(found.rewrite.corrected_query.as_deref(), Some("async"));
 }
 
+fn fuzzy_match() -> Options {
+    Options {
+        fuzzy_match: true,
+        ..Options::default()
+    }
+}
+
+#[test]
+fn fuzzy_match_finds_near_words_in_the_index_without_rewriting_the_query() {
+    let (_dir, _handle, index) = fixture();
+    for typo in ["asynx", "asyncc", "aysnc"] {
+        assert!(search_with(&index, typo, Options::default()).hits.is_empty());
+        let found = search_with(&index, typo, fuzzy_match());
+        assert!(!found.hits.is_empty(), "{typo} should reach async");
+        assert_eq!(found.hits[0].document_id, "rfc:2394", "{typo}");
+        assert!(found.rewrite.is_empty(), "the query text stays as typed");
+    }
+}
+
+#[test]
+fn an_exact_word_outranks_a_near_one() {
+    let (_dir, _handle, index) = fixture();
+    let exact = search_with(&index, "traits", fuzzy_match());
+    let plain = search_with(&index, "traits", Options::default());
+    // Everything the exact search finds is still found, in the same order at the top.
+    assert!(exact.total >= plain.total);
+    assert_eq!(exact.hits[0].document_id, plain.hits[0].document_id);
+}
+
+#[test]
+fn short_words_digits_and_phrases_stay_exact_under_fuzzy_match() {
+    let (_dir, _handle, index) = fixture();
+    // `fn` is under 4 letters: no neighbours.
+    assert_eq!(
+        search_with(&index, "fx", fuzzy_match()).total,
+        search_with(&index, "fx", Options::default()).total
+    );
+    // `3059` is one digit from `3058` but is another number.
+    assert!(search_with(&index, "3059", fuzzy_match()).hits.is_empty());
+    // A quoted phrase is literal.
+    assert!(search_with(&index, "\"asynx\"", fuzzy_match()).hits.is_empty());
+}
+
 #[test]
 fn a_known_word_is_not_treated_as_a_typo() {
     let (_dir, _handle, index) = fixture();
@@ -385,6 +429,7 @@ fn a_known_word_is_not_treated_as_a_typo() {
             fuzzy: true,
             synonyms: true,
             lemmas: false,
+            ..Options::default()
         },
     );
     assert!(found.rewrite.corrections.is_empty());
@@ -400,6 +445,7 @@ fn quoted_phrases_are_never_rewritten() {
             fuzzy: true,
             synonyms: true,
             lemmas: false,
+            ..Options::default()
         },
     );
     assert!(found.rewrite.is_empty());
@@ -421,6 +467,7 @@ fn synonyms_expand_the_query_and_say_so() {
             fuzzy: false,
             synonyms: true,
             lemmas: false,
+            ..Options::default()
         },
     );
     assert_eq!(found.hits[0].document_id, "internals:200");

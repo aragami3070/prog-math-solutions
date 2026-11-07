@@ -19,6 +19,9 @@ const MIN_LEN: usize = 5;
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Options {
     pub fuzzy: bool,
+    /// Index-level fuzzy matching: every query word also matches indexed words within an edit
+    /// distance (Tantivy `FuzzyTermQuery`), without rewriting the query.
+    pub fuzzy_match: bool,
     pub synonyms: bool,
     pub lemmas: bool,
 }

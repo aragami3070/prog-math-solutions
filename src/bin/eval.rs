@@ -137,6 +137,7 @@ async fn run(options: &HashMap<String, String>) -> Result<()> {
     let semantic = Semantic::from_env();
     let rewriting = Options {
         fuzzy: options.get("fuzzy").is_some_and(|v| v == "on"),
+        fuzzy_match: options.get("fuzzy_match").is_some_and(|v| v == "on"),
         synonyms: options.get("synonyms").is_some_and(|v| v == "on"),
         lemmas: options.get("lemmas").is_some_and(|v| v == "on"),
     };
@@ -215,6 +216,7 @@ async fn run(options: &HashMap<String, String>) -> Result<()> {
         "variant": variant,
         "mode": mode.as_str(),
         "fuzzy": rewriting.fuzzy,
+        "fuzzy_match": rewriting.fuzzy_match,
         "synonyms": rewriting.synonyms,
         "synonyms_version": SYNONYMS_VERSION,
         "lemmas": rewriting.lemmas,

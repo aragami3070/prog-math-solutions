@@ -8,7 +8,8 @@ use tantivy::{
     TantivyDocument, Term,
     collector::{Count, TopDocs},
     query::{
-        BooleanQuery, BoostQuery, ConstScoreQuery, Occur, PhraseQuery, Query, RangeQuery, TermQuery,
+        BooleanQuery, BoostQuery, ConstScoreQuery, FuzzyTermQuery, Occur, PhraseQuery, Query,
+        RangeQuery, TermQuery,
     },
     schema::{Field, IndexRecordOption, Value},
     snippet::SnippetGenerator,
@@ -22,6 +23,23 @@ const TITLE_BOOST: f32 = 3.0;
 const TITLE_PHRASE_BOOST: f32 = 4.0;
 const BODY_PHRASE_BOOST: f32 = 2.0;
 const EXACT_ID_BOOST: f32 = 100.0;
+/// Fuzzy branches weigh less than exact ones, so an exact hit still ranks above a near miss.
+const FUZZY_MATCH_BOOST: f32 = 0.4;
+/// Shorter words are matched exactly only: at distance 1 they would match half the vocabulary.
+const FUZZY_MIN_LEN: usize = 4;
+
+/// Lucene's `AUTO` edit distance: 1 for words up to five letters, 2 beyond.
+fn fuzzy_distance(token: &str) -> Option<u8> {
+    let len = token.chars().count();
+    // Identifiers with digits (`e0308`, `3058`) are matched exactly: a near number is another one.
+    if len < FUZZY_MIN_LEN || token.chars().any(|c| c.is_ascii_digit()) {
+        None
+    } else if len <= 5 {
+        Some(1)
+    } else {
+        Some(2)
+    }
+}
 const SNIPPET_CHARS: usize = 240;
 
 #[derive(Debug, Default, Clone)]
@@ -162,6 +180,23 @@ impl SearchIndex {
                     should.push((
                         Occur::Should,
                         boosted(TermQuery::new(term, IndexRecordOption::WithFreqs), boost),
+                    ));
+                }
+            }
+        }
+        if options.fuzzy_match && !phrase_only {
+            for token in &terms {
+                let Some(distance) = fuzzy_distance(token) else {
+                    continue;
+                };
+                for (field, boost) in [(f.title, TITLE_BOOST), (f.body, 1.0)] {
+                    let term = Term::from_field_text(field, token);
+                    should.push((
+                        Occur::Should,
+                        boosted(
+                            FuzzyTermQuery::new(term, distance, true),
+                            boost * FUZZY_MATCH_BOOST,
+                        ),
                     ));
                 }
             }

@@ -42,22 +42,25 @@ it("reports an export error instead of saving it as a file", async () => {
 });
 
 it("builds a search path with only the filters that are set", () => {
-  const params = { q: "async fn", source: "" as const, complete_only: false, fuzzy: false, synonyms: false, lemmas: false, mode: "lexical" as const, page: 2 };
+  const params = { q: "async fn", source: "" as const, complete_only: false, fuzzy: false, synonyms: false, lemmas: false, fuzzy_match: false, mode: "lexical" as const, page: 2 };
   const url = new URL(searchPath(params), "http://localhost");
   expect(Object.fromEntries(url.searchParams)).toEqual({ q: "async fn", page: "2", page_size: "20" });
   const filtered = new URL(searchPath({ ...params, source: "rfc", complete_only: true }), "http://localhost");
   expect(filtered.searchParams.get("source")).toBe("rfc");
   expect(filtered.searchParams.get("complete_only")).toBe("true");
   expect(new URL(searchPath({ ...params, mode: "hybrid" }), "http://localhost").searchParams.get("mode")).toBe("hybrid");
+  expect(new URL(searchPath({ ...params, fuzzy_match: true }), "http://localhost").searchParams.get("fuzzy_match")).toBe("true");
   const period = new URL(searchPath({ ...params, year_from: 2019, year_to: 2020 }), "http://localhost");
   expect([period.searchParams.get("year_from"), period.searchParams.get("year_to")]).toEqual(["2019", "2020"]);
 });
 
 it("validates search parameters from the URL", () => {
-  expect(searchParams({ q: "x", source: "evil", complete_only: "true", page: "0" })).toEqual({ q: "x", source: "", complete_only: true, fuzzy: true, synonyms: true, lemmas: false, mode: "lexical", page: 1 });
+  expect(searchParams({ q: "x", source: "evil", complete_only: "true", page: "0" })).toEqual({ q: "x", source: "", complete_only: true, fuzzy: true, synonyms: true, lemmas: false, fuzzy_match: false, mode: "lexical", page: 1 });
   expect(searchParams({ q: "x", mode: "hybrid", lemmas: "true" })).toMatchObject({ mode: "hybrid", lemmas: true });
   expect(searchParams({ q: "x", mode: "evil" }).mode).toBe("lexical");
   expect(searchParams({ q: "x", fuzzy: "false", synonyms: "false" })).toMatchObject({ fuzzy: false, synonyms: false });
+  expect(searchParams({ q: "x" }).fuzzy_match).toBe(false);
+  expect(searchParams({ q: "x", fuzzy_match: "true" }).fuzzy_match).toBe(true);
   expect(searchParams({ q: "a".repeat(500) }).q).toHaveLength(200);
   expect(searchParams({ q: "x", year_from: "2019", year_to: "2020" })).toMatchObject({ year_from: 2019, year_to: 2020 });
   expect(searchParams({ q: "x", year_from: "1800", year_to: "abc" })).not.toHaveProperty("year_from");

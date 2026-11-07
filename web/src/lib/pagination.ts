@@ -20,6 +20,8 @@ export interface SearchParams {
   fuzzy: boolean;
   synonyms: boolean;
   lemmas: boolean;
+  /** Fuzzy matching inside the index (edit distance); off unless the URL turns it on. */
+  fuzzy_match: boolean;
   mode: SearchMode;
   /** Year of the first post, inclusive; RFCs have no date and are left out when a bound is set. */
   year_from?: number;
@@ -42,6 +44,7 @@ export function searchParams(search: Record<string, unknown>): SearchParams {
     fuzzy: !(search.fuzzy === false || search.fuzzy === "false"),
     synonyms: !(search.synonyms === false || search.synonyms === "false"),
     lemmas: search.lemmas === true || search.lemmas === "true",
+    fuzzy_match: search.fuzzy_match === true || search.fuzzy_match === "true",
     mode: search.mode === "vector" || search.mode === "hybrid" ? search.mode : "lexical",
     ...(year(search.year_from) !== undefined && { year_from: year(search.year_from) }),
     ...(year(search.year_to) !== undefined && { year_to: year(search.year_to) }),
@@ -50,13 +53,14 @@ export function searchParams(search: Record<string, unknown>): SearchParams {
 }
 
 /** The API path for a search; `page_size` is fixed. */
-export function searchPath({ q, source, complete_only, fuzzy, synonyms, lemmas, mode, year_from, year_to, page }: SearchParams, pageSize = 20) {
+export function searchPath({ q, source, complete_only, fuzzy, synonyms, lemmas, fuzzy_match, mode, year_from, year_to, page }: SearchParams, pageSize = 20) {
   const query = new URLSearchParams({ q, page: String(page), page_size: String(pageSize) });
   if (source) query.set("source", source);
   if (complete_only) query.set("complete_only", "true");
   if (fuzzy) query.set("fuzzy", "true");
   if (synonyms) query.set("synonyms", "true");
   if (lemmas) query.set("lemmas", "true");
+  if (fuzzy_match) query.set("fuzzy_match", "true");
   if (mode !== "lexical") query.set("mode", mode);
   if (year_from !== undefined) query.set("year_from", String(year_from));
   if (year_to !== undefined) query.set("year_to", String(year_to));
