@@ -9,3 +9,5 @@
 *.log
 /.claude/
 /.venv-nlp/
+__pycache__
+/rks-transfer
