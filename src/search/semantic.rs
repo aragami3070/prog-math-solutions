@@ -45,6 +45,7 @@ pub struct Semantic {
     http: reqwest::Client,
     qdrant: String,
     embed: String,
+    collection: String,
 }
 
 /// The best chunk of a document and how close it is to the query.
@@ -87,6 +88,7 @@ impl Semantic {
                 .expect("a plain HTTP client builds"),
             qdrant: qdrant.trim_end_matches('/').to_owned(),
             embed: embed.trim_end_matches('/').to_owned(),
+            collection: COLLECTION.to_owned(),
         }
     }
 
@@ -99,10 +101,46 @@ impl Semantic {
                 .trim_end_matches('/')
                 .to_owned()
         };
-        Self::new(
+        let mut semantic = Self::new(
             &url("QDRANT_URL", "http://127.0.0.1:6333"),
             &url("EMBED_URL", "http://127.0.0.1:8090"),
-        )
+        );
+        semantic.collection = url("QDRANT_COLLECTION", COLLECTION);
+        semantic
+    }
+
+    /// Fetch stored previews for a pair from the collection that produced the snapshot.
+    pub async fn chunk_texts(
+        &self,
+        collection: &str,
+        a: &str,
+        a_ordinal: usize,
+        b: &str,
+        b_ordinal: usize,
+    ) -> Result<(Option<String>, Option<String>), String> {
+        if collection.is_empty()
+            || !collection
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+        {
+            return Err("invalid collection name".into());
+        }
+        let mut texts = Vec::new();
+        for (id, ordinal) in [(a, a_ordinal), (b, b_ordinal)] {
+            let response = self.http.post(format!("{}/collections/{}/points/scroll", self.qdrant, collection))
+                .json(&serde_json::json!({"limit": 1, "with_payload": ["text"], "with_vector": false,
+                    "filter": {"must": [{"key": "doc_id", "match": {"value": id}}, {"key": "ordinal", "match": {"value": ordinal}}]}}))
+                .send().await.and_then(|r| r.error_for_status()).map_err(|e| e.to_string())?;
+            let value: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
+            texts.push(
+                value["result"]["points"]
+                    .as_array()
+                    .and_then(|p| p.first())
+                    .and_then(|p| p["payload"]["text"].as_str())
+                    .map(str::to_owned),
+            );
+        }
+        Ok((texts.remove(0), texts.remove(0)))
     }
 
     async fn embed_query(&self, text: &str) -> Result<Vec<f32>, String> {
@@ -154,8 +192,8 @@ impl Semantic {
         let response = self
             .http
             .post(format!(
-                "{}/collections/{COLLECTION}/points/search",
-                self.qdrant
+                "{}/collections/{}/points/search",
+                self.qdrant, self.collection
             ))
             .json(&serde_json::json!({
                 "vector": vector,

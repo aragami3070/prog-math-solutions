@@ -78,6 +78,7 @@ impl AppState {
         search::rebuild,
         graph::neighbors,
         graph::overview,
+        graph::related,
         graph::rebuild,
         events::click,
         events::experiment

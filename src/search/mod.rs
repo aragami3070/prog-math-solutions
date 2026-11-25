@@ -7,6 +7,7 @@
 mod analyzer;
 mod index;
 pub mod query;
+pub mod related;
 mod rewrite;
 pub mod semantic;
 mod title;

@@ -13,6 +13,48 @@ const route = getRouteApi("/graph");
 
 const SHOWN_NEIGHBOURS = 30;
 
+type RelatedView = {
+  generation: string;
+  topics: { id: string; label: string; matched_terms: string[]; provenance: string; review_state: string }[];
+  similar: { document_id: string; title: string; url: string; score: number; chunk_center: number; chunk_other: number; chunk_score: number; model: string; method: string; text_center: string | null; text_other: string | null; collection: string }[] | null;
+};
+
+function RelatedCandidates({ document }: { document: string }) {
+  const related = useQuery({
+    queryKey: ["graph-related", document],
+    queryFn: ({ signal }) => get<RelatedView>(`/api/graph/related?document=${encodeURIComponent(document)}`, signal),
+    retry: false,
+  });
+  if (related.isPending) return <Loading />;
+  if (related.isError) return <ErrorPanel error={related.error} retry={() => void related.refetch()} />;
+  const { topics, similar } = related.data;
+  return (
+    <section aria-label="Предварительные тематические связи">
+      <h2>Темы и похожие документы</h2>
+      <h3>Темы</h3>
+      {topics.length === 0 ? <p>По выбранным словам темы не определены.</p> : (
+        <ul>{topics.map(topic => <li key={topic.id}><strong>{topic.label}</strong> <small>({topic.id})</small> - слова: {topic.matched_terms.join(", ")}</li>)}</ul>
+      )}
+      <h3>Похожие документы</h3>
+      {similar === null ? <p>Файл data/similar.jsonl отсутствует: кандидаты недоступны.</p> : similar.length === 0 ? <p>В подготовленном снимке кандидатов для этого документа нет.</p> : (
+        <ol>{similar.map(item => <li key={item.document_id}>
+          <strong>{item.title}</strong> ({item.document_id}) - cosine {item.score.toFixed(4)}
+          {" · "}<a href={`/graph?document=${encodeURIComponent(item.document_id)}`}>посмотреть связи</a>
+          {" · "}<a href={item.url} target="_blank" rel="noopener noreferrer">открыть оригинал ↗</a>
+          <details className="related-details"><summary>Как получено и похожие фрагменты</summary>
+            <p>Модель: {item.model}; метод: {item.method}. Cosine фрагментов: {item.chunk_score.toFixed(4)}.</p>
+            <p>Фрагменты из старой коллекции могут быть сокращены до 600 символов; заголовок также учитывался моделью.</p>
+            <div className="related-chunks">
+              <div><strong>{document}, фрагмент {item.chunk_center}</strong><p>{item.text_center ?? "Текст фрагмента недоступен"}</p></div>
+              <div><strong>{item.document_id}, фрагмент {item.chunk_other}</strong><p>{item.text_other ?? "Текст фрагмента недоступен"}</p></div>
+            </div>
+          </details>
+        </li>)}</ol>
+      )}
+    </section>
+  );
+}
+
 /**
  * The whole reference graph as a picture, plus the selected document's neighbours as lists with
  * the linking URLs. The selected document lives in the URL (`?document=`), so a link to a view
@@ -150,6 +192,7 @@ export function GraphPage() {
         : data && (
           <>
             <DocumentCard source={data.center.source} label={data.center.id} title={data.center.title} url={data.center.url} completeness={data.center.completeness} />
+            <RelatedCandidates document={document} />
             <div className="toolbar">
               <span><strong>{data.nodes.length}</strong> соседей · связей: {data.total_edges}</span>
               <span>{data.built_at ? `Граф построен ${new Date(data.built_at).toLocaleString("ru-RU")}` : "Граф ещё не построен"}</span>

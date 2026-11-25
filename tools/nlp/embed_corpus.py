@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """Chunks the corpus, embeds the chunks and loads them into Qdrant.
 
-    .venv-nlp/bin/python tools/nlp/embed_corpus.py [--max-chunks-per-doc 6] [--limit N]
+    .venv-nlp/bin/python tools/nlp/embed_corpus.py --collection NEW_COLLECTION [--limit N]
 
 Chunks follow the posts: consecutive posts are packed up to CHUNK_CHARS, a longer post is cut
 at paragraph or sentence ends. Every chunk carries the title (the topic is part of its
-meaning). Only the first MAX_CHUNKS chunks of a document are embedded: this bounds cost on a
-small machine, and it is a stated limit, not a silent one (see data/vectors.json).
-Qdrant ids are stable (document id, ordinal), so a rerun overwrites instead of duplicating.
-The collection is rebuilt from scratch each run; the database stays the source of truth.
+meaning). All chunks are embedded. The model's token limit may still truncate individual inputs.
+Stable UUID point IDs support any number of chunks. A new collection name is required and an
+existing collection is never overwritten. The database stays the source of truth.
 Run tools/nlp/set_year.py afterwards: the period filter needs the `year` payload.
 """
 import argparse
@@ -20,8 +19,11 @@ import subprocess
 import sys
 import time
 import urllib.request
+import urllib.error
+import uuid
+from pathlib import Path
 
-from common import CHUNKER_VERSION, COLLECTION, DIM, MODEL, embed, load_model
+from common import CHUNKER_VERSION, DIM, MODEL, embed, load_model
 
 CHUNK_CHARS = 1100
 QDRANT = "http://127.0.0.1:6333"
@@ -82,7 +84,8 @@ def documents(limit):
         posts.append(text)
     if current:
         yield current, posts
-    proc.wait()
+    if proc.wait() != 0:
+        raise RuntimeError("failed to read corpus from PostgreSQL")
 
 
 def qdrant(method, path, payload=None):
@@ -94,27 +97,98 @@ def qdrant(method, path, payload=None):
 
 
 def point_id(doc_db_id, ordinal):
-    return doc_db_id * 100 + ordinal  # ordinal < 100
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"rust-knowledge:{doc_db_id}:{ordinal}"))
+
+
+def corpus_hash(limit):
+    digest = hashlib.sha256()
+    for meta, posts in documents(limit):
+        digest.update(json.dumps([meta, posts], ensure_ascii=False, sort_keys=True).encode())
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+
+def existing_points(collection):
+    points = {}
+    offset = None
+    while True:
+        body = {"limit": 500, "with_payload": True, "with_vector": False}
+        if offset is not None:
+            body["offset"] = offset
+        page = qdrant("POST", f"/collections/{collection}/points/scroll", body)["result"]
+        for point in page["points"]:
+            points[str(point["id"])] = point["payload"]
+        offset = page.get("next_page_offset")
+        if offset is None:
+            return points
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--max-chunks-per-doc", type=int, default=6)
+    parser.add_argument("--collection", required=True, help="new Qdrant collection name (must not exist)")
     parser.add_argument("--limit", type=int, default=0, help="documents (0 = all)")
+    parser.add_argument("--resume", action="store_true", help="continue an interrupted collection")
+    parser.add_argument("--adopt-existing", action="store_true", help="adopt a legacy interrupted collection without a checkpoint; model provenance cannot be verified")
     args = parser.parse_args()
-    assert args.max_chunks_per_doc < 100
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", args.collection):
+        parser.error("collection name must contain only letters, digits, _ and -")
+    collection = args.collection
+    if args.adopt_existing and not args.resume:
+        parser.error("--adopt-existing requires --resume")
+    checkpoint = Path(__file__).resolve().parents[2] / "data" / f"vectors-{collection}.checkpoint.json"
+    final = checkpoint.with_name(f"vectors-{collection}.json")
+    if final.exists():
+        parser.error("collection already has a completed manifest")
+    try:
+        info = qdrant("GET", f"/collections/{collection}")["result"]
+    except urllib.error.HTTPError as error:
+        if error.code != 404:
+            raise
+        info = None
+    if args.resume and info is None:
+        parser.error("collection does not exist; cannot resume")
+    if not args.resume and info is not None:
+        parser.error(f"collection {collection} already exists; choose a new name")
+    if args.resume and not checkpoint.exists() and not args.adopt_existing:
+        parser.error("checkpoint missing; legacy collections require --adopt-existing")
 
     model = load_model()
     revision = getattr(model[0].auto_model.config, "_commit_hash", None)
-    try:
-        qdrant("DELETE", f"/collections/{COLLECTION}")
-    except Exception:
-        pass
-    qdrant("PUT", f"/collections/{COLLECTION}", {"vectors": {"size": DIM, "distance": "Cosine"}})
-    for field in ("source", "completeness", "doc_id"):
-        qdrant("PUT", f"/collections/{COLLECTION}/index", {"field_name": field, "field_schema": "keyword"})
+    config = {"collection": collection, "model": MODEL, "model_revision": revision,
+              "dim": DIM, "chunker": CHUNKER_VERSION, "chunk_chars": CHUNK_CHARS,
+              "max_seq_length": model.max_seq_length, "limit": args.limit, "corpus_sha256": corpus_hash(args.limit)}
+    if args.resume:
+        if info["config"]["params"]["vectors"]["size"] != DIM or info["config"]["params"]["vectors"]["distance"] != "Cosine":
+            parser.error("collection vector configuration does not match")
+        if checkpoint.exists():
+            saved = json.loads(checkpoint.read_text())
+            if saved["config"] != config:
+                parser.error("checkpoint mismatch: corpus, model or settings changed")
+        else:
+            print("WARNING: legacy collection has no checkpoint; original model and full corpus cannot be verified", file=sys.stderr)
+        existing = existing_points(collection)
+        unseen = set(existing)
+        for meta, posts in documents(args.limit):
+            for ordinal, text in enumerate(chunk(posts)):
+                key = point_id(meta["db_id"], ordinal)
+                if key in existing:
+                    expected = {k: meta[k] for k in ("db_id", "doc_id", "source", "completeness")}
+                    expected.update({"ordinal": ordinal, "text": text})
+                    if any(existing[key].get(k) != v for k, v in expected.items()):
+                        raise RuntimeError(f"existing chunk differs from current corpus: {meta['doc_id']} / {ordinal}")
+                    unseen.remove(key)
+        if unseen:
+            raise RuntimeError(f"collection contains {len(unseen)} points absent from current corpus")
+        if not checkpoint.exists():
+            checkpoint.write_text(json.dumps({"config": config, "legacy_provenance_unverified": True}, indent=2))
+    else:
+        checkpoint.write_text(json.dumps({"config": config, "legacy_provenance_unverified": False}, indent=2), encoding="utf-8")
+        qdrant("PUT", f"/collections/{collection}", {"vectors": {"size": DIM, "distance": "Cosine"}})
+        for field in ("source", "completeness", "doc_id"):
+            qdrant("PUT", f"/collections/{collection}/index", {"field_name": field, "field_schema": "keyword"})
+        existing = {}
 
-    started, docs, chunks_total, truncated = time.time(), 0, 0, 0
+    started, docs, chunks_total = time.time(), 0, 0
     batch = []
 
     def flush():
@@ -125,31 +199,37 @@ def main():
         points = [{"id": point_id(b["db_id"], b["ordinal"]), "vector": v,
                    "payload": {k: b[k] for k in ("db_id", "doc_id", "source", "completeness", "ordinal", "text")}}
                   for b, v in zip(batch, vectors)]
-        qdrant("PUT", f"/collections/{COLLECTION}/points?wait=true", {"points": points})
+        qdrant("PUT", f"/collections/{collection}/points?wait=true", {"points": points})
         batch = []
 
     for meta, posts in documents(args.limit):
         pieces = chunk(posts)
-        truncated += len(pieces) > args.max_chunks_per_doc
-        for ordinal, text in enumerate(pieces[: args.max_chunks_per_doc]):
-            batch.append({**meta, "ordinal": ordinal, "text": text[:600],
-                          "passage": f"{meta['title']}. {text}"})
+        for ordinal, text in enumerate(pieces):
             chunks_total += 1
+            if point_id(meta["db_id"], ordinal) in existing:
+                continue
+            batch.append({**meta, "ordinal": ordinal, "text": text,
+                          "passage": f"{meta['title']}. {text}"})
             if len(batch) >= 32:
                 flush()
         docs += 1
         if docs % 100 == 0:
             print(f"{docs} documents, {chunks_total} chunks, {time.time() - started:.0f}s", file=sys.stderr, flush=True)
     flush()
-    manifest = {"collection": COLLECTION, "model": MODEL, "model_revision": revision, "dim": DIM,
+    if corpus_hash(args.limit) != config["corpus_sha256"]:
+        raise RuntimeError("corpus changed during embedding; collection not marked complete")
+    manifest = {"collection": collection, "model": MODEL, "model_revision": revision, "dim": DIM,
                 "chunker": CHUNKER_VERSION, "chunk_chars": CHUNK_CHARS,
-                "max_chunks_per_doc": args.max_chunks_per_doc, "documents": docs,
-                "chunks": chunks_total, "documents_truncated": truncated,
+                "max_chunks_per_doc": None, "documents": docs,
+                "chunks": chunks_total, "documents_truncated": 0,
+                "corpus_sha256": config["corpus_sha256"],
+                "legacy_provenance_unverified": json.loads(checkpoint.read_text())["legacy_provenance_unverified"],
                 "built_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 "seconds": round(time.time() - started)}
     manifest["sha256"] = hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()
-    with open(os.path.join(os.path.dirname(__file__), "..", "..", "data", "vectors.json"), "w") as f:
+    with final.open("x") as f:
         json.dump(manifest, f, indent=2)
+    checkpoint.unlink()
     print(json.dumps(manifest, indent=2), file=sys.stderr)
 
 

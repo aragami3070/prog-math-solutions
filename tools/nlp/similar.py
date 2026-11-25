@@ -28,7 +28,9 @@ from pathlib import Path
 
 import numpy as np
 
-from common import COLLECTION
+from common import COLLECTION as DEFAULT_COLLECTION
+
+COLLECTION = os.environ.get("QDRANT_COLLECTION", DEFAULT_COLLECTION)
 
 QDRANT = os.environ.get("QDRANT_URL", "http://127.0.0.1:6333")
 
