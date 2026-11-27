@@ -17,6 +17,7 @@ export type SearchMode = "lexical" | "vector" | "hybrid";
 
 export interface SearchParams {
   q: string;
+  topic?: string;
   source: "" | "rfc" | "internals";
   complete_only: boolean;
   /** Typo repair and synonym expansion; on unless the URL turns them off. */
@@ -42,15 +43,17 @@ function year(value: unknown): number | undefined {
 /** Validates `/search?q=&source=&complete_only=&page=` from the URL. */
 export function searchParams(search: Record<string, unknown>): SearchParams {
   const page = Number(search.page ?? 1);
+  const topic = typeof search.topic === "string" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(search.topic) && search.topic.length <= 100 ? search.topic : undefined;
   return {
     q: typeof search.q === "string" ? search.q.slice(0, 200) : "",
+    ...(topic && { topic }),
     source: search.source === "rfc" || search.source === "internals" ? search.source : "",
     complete_only: search.complete_only === true || search.complete_only === "true",
     fuzzy: !(search.fuzzy === false || search.fuzzy === "false"),
     synonyms: !(search.synonyms === false || search.synonyms === "false"),
     lemmas: search.lemmas === true || search.lemmas === "true",
     fuzzy_match: search.fuzzy_match === true || search.fuzzy_match === "true",
-    mode: search.mode === "vector" || search.mode === "hybrid" ? search.mode : "lexical",
+    mode: topic ? "lexical" : search.mode === "vector" || search.mode === "hybrid" ? search.mode : "lexical",
     ...(year(search.year_from) !== undefined && { year_from: year(search.year_from) }),
     ...(year(search.year_to) !== undefined && { year_to: year(search.year_to) }),
     ...(POOL_SIZES.includes(Number(search.pool)) && { pool: Number(search.pool) }),
@@ -58,9 +61,15 @@ export function searchParams(search: Record<string, unknown>): SearchParams {
   };
 }
 
+/** Selecting a topic starts a lexical search; clearing it leaves the current mode unchanged. */
+export function selectSearchTopic(params: SearchParams, topic: string): SearchParams {
+  return { ...params, topic: topic || undefined, mode: topic ? "lexical" : params.mode, page: 1 };
+}
+
 /** The API path for a search; `page_size` is fixed. */
-export function searchPath({ q, source, complete_only, fuzzy, synonyms, lemmas, fuzzy_match, mode, year_from, year_to, pool, page }: SearchParams, pageSize = 20) {
+export function searchPath({ q, topic, source, complete_only, fuzzy, synonyms, lemmas, fuzzy_match, mode, year_from, year_to, pool, page }: SearchParams, pageSize = 20) {
   const query = new URLSearchParams({ q, page: String(page), page_size: String(pageSize) });
+  if (topic) query.set("topic", topic);
   if (source) query.set("source", source);
   if (complete_only) query.set("complete_only", "true");
   if (fuzzy) query.set("fuzzy", "true");

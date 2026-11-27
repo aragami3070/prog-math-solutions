@@ -57,6 +57,7 @@ pub struct RelatedQuery {
 #[derive(serde::Serialize, utoipa::ToSchema)]
 pub struct RelatedView {
     topics: Vec<crate::search::related::TopicCandidate>,
+    topic_status: String,
     similar: Option<Vec<crate::search::related::SimilarCandidate>>,
     generation: String,
 }
@@ -83,8 +84,33 @@ pub async fn related(
             let document = index
                 .document(&query.document)?
                 .ok_or(crate::search::Error::InvalidQuery("Document not found"))?;
+            let status = document
+                .topics
+                .iter()
+                .find_map(|s| s.strip_prefix("__status:"))
+                .unwrap_or("missing")
+                .to_owned();
+            let topics = if status == "missing" {
+                crate::search::related::topics(&document.title, &document.body)
+            } else {
+                document
+                    .topics
+                    .iter()
+                    .filter(|id| !id.starts_with("__"))
+                    .map(|id| {
+                        let prefix = format!("__review:{id}:");
+                        let review = document
+                            .topics
+                            .iter()
+                            .find_map(|s| s.strip_prefix(&prefix))
+                            .unwrap_or("unreviewed");
+                        crate::search::related::classification_topic(id, review)
+                    })
+                    .collect()
+            };
             Ok(RelatedView {
-                topics: crate::search::related::topics(&document.title, &document.body),
+                topics,
+                topic_status: status,
                 similar: crate::search::related::similar(
                     &index,
                     &query.document,

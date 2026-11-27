@@ -9,7 +9,10 @@ use utoipa::{IntoParams, ToSchema};
 #[serde(deny_unknown_fields)]
 pub struct SearchQuery {
     /// Words, `"a quoted phrase"`, or an identifier such as `rfc:3058`, `RFC 3058`, `3058`.
+    #[serde(default)]
     pub q: String,
+    /// Exact assigned v3 topic ID (lexical mode only).
+    pub topic: Option<String>,
     pub source: Option<Source>,
     /// Only documents whose every page was collected.
     #[serde(default)]
@@ -82,6 +85,7 @@ pub struct SearchScope {
     pub synonyms: bool,
     pub source: Option<String>,
     pub complete_only: bool,
+    pub topic: Option<String>,
     pub year_from: Option<i32>,
     pub year_to: Option<i32>,
     pub synonyms_version: &'static str,

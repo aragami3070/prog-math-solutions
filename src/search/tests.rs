@@ -7,6 +7,7 @@ use tantivy::{
 
 fn doc(id: i64, source: &str, native_id: &str, title: &str, body: &str) -> IndexDocument {
     IndexDocument {
+        topics: Vec::new(),
         id,
         source: source.into(),
         native_id: native_id.into(),
@@ -387,7 +388,11 @@ fn fuzzy_match() -> Options {
 fn fuzzy_match_finds_near_words_in_the_index_without_rewriting_the_query() {
     let (_dir, _handle, index) = fixture();
     for typo in ["asynx", "asyncc", "aysnc"] {
-        assert!(search_with(&index, typo, Options::default()).hits.is_empty());
+        assert!(
+            search_with(&index, typo, Options::default())
+                .hits
+                .is_empty()
+        );
         let found = search_with(&index, typo, fuzzy_match());
         assert!(!found.hits.is_empty(), "{typo} should reach async");
         assert_eq!(found.hits[0].document_id, "rfc:2394", "{typo}");
@@ -416,7 +421,11 @@ fn short_words_digits_and_phrases_stay_exact_under_fuzzy_match() {
     // `3059` is one digit from `3058` but is another number.
     assert!(search_with(&index, "3059", fuzzy_match()).hits.is_empty());
     // A quoted phrase is literal.
-    assert!(search_with(&index, "\"asynx\"", fuzzy_match()).hits.is_empty());
+    assert!(
+        search_with(&index, "\"asynx\"", fuzzy_match())
+            .hits
+            .is_empty()
+    );
 }
 
 #[test]
@@ -527,4 +536,35 @@ async fn vector_modes_degrade_to_lexical_and_say_why() {
         assert!(!found.hits.is_empty());
         assert!(!found.total_is_pool);
     }
+}
+
+#[test]
+fn assigned_topic_filters_and_supports_empty_queries() {
+    let dir = tempfile::tempdir().unwrap();
+    let handle = SearchHandle::open(dir.path());
+    let mut builder = handle.begin().unwrap();
+    let mut a = doc(1, "rfc", "1", "Async", "async text");
+    a.topics = vec!["async".into()];
+    builder.add(a).unwrap();
+    builder
+        .add(doc(2, "rfc", "2", "Async", "async text"))
+        .unwrap();
+    let index = builder.finish().unwrap();
+    let filters = Filters {
+        topic: Some("async".into()),
+        ..Default::default()
+    };
+    for q in ["", "async"] {
+        let result = index
+            .search(q, &filters, Options::default(), 0, 10)
+            .unwrap();
+        assert_eq!(result.total, 1);
+        assert_eq!(result.hits[0].id, 1);
+    }
+    assert_eq!(index.document("rfc:1").unwrap().unwrap().topics, ["async"]);
+    assert!(
+        index
+            .search("", &Filters::default(), Options::default(), 0, 10)
+            .is_err()
+    );
 }

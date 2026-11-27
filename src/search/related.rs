@@ -91,11 +91,34 @@ const RULES: &[Rule] = &[
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct TopicCandidate {
-    pub id: &'static str,
-    pub label: &'static str,
-    pub matched_terms: Vec<&'static str>,
-    pub provenance: &'static str,
-    pub review_state: &'static str,
+    pub id: String,
+    pub label: String,
+    pub matched_terms: Vec<String>,
+    pub provenance: String,
+    pub review_state: String,
+}
+
+/// Labels are taken from the same versioned taxonomy used by the classifier.
+pub fn classification_topic(id: &str, review_state: &str) -> TopicCandidate {
+    let taxonomy: serde_json::Value =
+        serde_json::from_str(include_str!("../../tools/nlp/topics-v3.json"))
+            .expect("embedded v3 taxonomy must be valid");
+    let label = taxonomy["topics"]
+        .as_array()
+        .and_then(|topics| {
+            topics
+                .iter()
+                .find(|topic| topic["id"].as_str() == Some(id))
+                .and_then(|topic| topic["label"].as_str())
+        })
+        .unwrap_or(id);
+    TopicCandidate {
+        id: id.to_owned(),
+        label: label.to_owned(),
+        matched_terms: Vec::new(),
+        provenance: "classification-v3".into(),
+        review_state: review_state.to_owned(),
+    }
 }
 
 fn contains_term(text: &str, term: &str) -> bool {
@@ -117,13 +140,14 @@ pub fn topics(title: &str, body: &str) -> Vec<TopicCandidate> {
                 .iter()
                 .copied()
                 .filter(|term| contains_term(&text, term))
+                .map(str::to_owned)
                 .collect();
             (!matched_terms.is_empty()).then_some(TopicCandidate {
-                id: rule.id,
-                label: rule.label,
+                id: rule.id.to_owned(),
+                label: rule.label.to_owned(),
                 matched_terms,
-                provenance: "keyword-baseline-v1",
-                review_state: "unreviewed",
+                provenance: "keyword-baseline-v1".into(),
+                review_state: "unreviewed".into(),
             })
         })
         .collect()

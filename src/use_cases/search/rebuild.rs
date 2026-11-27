@@ -18,6 +18,7 @@ pub async fn execute(
     let started = Instant::now();
     let mut builder = handle.begin()?;
     builder.set_marker(search::corpus_marker(tx).await?);
+    let mut topics = search::effective_topics(tx).await?;
     let mut rows = search::documents(tx);
     while let Some(row) = rows.try_next().await? {
         let title = display_title(&row.source, &row.title);
@@ -30,6 +31,7 @@ pub async fn execute(
             body: row.body_text,
             completeness: row.completeness,
             year: row.year,
+            topics: topics.remove(&row.id).unwrap_or_default(),
         })?;
     }
     drop(rows);

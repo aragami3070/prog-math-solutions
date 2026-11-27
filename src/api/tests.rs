@@ -20,6 +20,25 @@ fn app() -> Router {
 }
 
 #[tokio::test]
+async fn taxonomy_returns_the_embedded_v3_document_without_database() {
+    use http_body_util::BodyExt;
+
+    let response = app()
+        .oneshot(Request::get("/api/taxonomy").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["content-type"], "application/json");
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let actual: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let expected: serde_json::Value =
+        serde_json::from_str(include_str!("../../tools/nlp/topics-v3.json")).unwrap();
+    assert_eq!(actual, expected);
+    assert_eq!(actual["version"], "v3");
+    assert!(!actual["topics"].as_array().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn bad_pagination_is_rejected_without_database() {
     for query in [
         "page=0",
@@ -87,6 +106,7 @@ async fn openapi_and_unknown_api_route() {
     assert_eq!(response.status(), StatusCode::OK);
     let body = response.into_body().collect().await.unwrap().to_bytes();
     let spec: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(spec["paths"]["/api/taxonomy"]["get"].is_object());
     assert!(spec["paths"]["/api/documents"]["get"].is_object());
     assert!(spec["paths"]["/api/sources/export"]["get"].is_object());
     assert_eq!(

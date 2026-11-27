@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { DocumentCard } from "../../components/DocumentCard";
@@ -7,7 +7,7 @@ import { PageHeading } from "../../components/PageHeading";
 import { Pagination } from "../../components/Pagination";
 import { get, rebuildSearchIndex } from "../../lib/client";
 import { number } from "../../lib/format";
-import { POOL_SIZES, searchPath } from "../../lib/pagination";
+import { POOL_SIZES, searchPath, selectSearchTopic } from "../../lib/pagination";
 import { SOURCES } from "../../lib/sources";
 import type { SearchResults } from "../../lib/types";
 
@@ -19,8 +19,14 @@ export function SearchPage() {
   const navigate = route.useNavigate();
   const client = useQueryClient();
   const [draft, setDraft] = useState(params.q);
-  const searching = params.q.trim() !== "";
+  useEffect(() => setDraft(params.q), [params.q]);
+  const searching = params.q.trim() !== "" || !!params.topic;
 
+  const taxonomy = useQuery({
+    queryKey: ["taxonomy", "v3"],
+    queryFn: ({ signal }) => get<{ version: string; topics: { id: string; label: string }[] }>("/api/taxonomy", signal),
+    retry: false,
+  });
   const query = useQuery({
     queryKey: ["search", params],
     queryFn: ({ signal }) => get<SearchResults>(searchPath(params, PAGE_SIZE), signal),
@@ -56,15 +62,25 @@ export function SearchPage() {
           aria-label="Поисковый запрос"
           onChange={event => setDraft(event.target.value)}
         />
-        <button type="submit" disabled={draft.trim() === ""}>Найти</button>
+        <button type="submit" disabled={draft.trim() === "" && !params.topic}>Найти</button>
         <label>
           Режим{" "}
-          <select value={params.mode} onChange={event => void navigate({ search: { ...params, mode: event.target.value as typeof params.mode, page: 1 } })}>
+          <select value={params.mode} disabled={!!params.topic} onChange={event => void navigate({ search: { ...params, mode: event.target.value as typeof params.mode, page: 1 } })}>
             <option value="lexical">Лексический</option>
             <option value="vector">Векторный</option>
             <option value="hybrid">Гибридный</option>
           </select>
         </label>
+        <label>
+          Тема{" "}
+          <select value={params.topic ?? ""} onChange={event => void navigate({ search: selectSearchTopic(params, event.target.value) })}>
+            <option value="">Все темы</option>
+            {params.topic && !taxonomy.data?.topics.some(topic => topic.id === params.topic) && <option value={params.topic}>{params.topic}</option>}
+            {taxonomy.data?.topics.map(topic => <option key={topic.id} value={topic.id}>{topic.label}</option>)}
+          </select>
+        </label>
+        {taxonomy.isPending && <span role="status">Загрузка тем…</span>}
+        {taxonomy.isError && <span role="alert">Не удалось загрузить темы. <button type="button" onClick={() => void taxonomy.refetch()}>Повторить</button></span>}
         <label>
           Источник{" "}
           <select value={params.source} onChange={event => void navigate({ search: { ...params, source: event.target.value as typeof params.source, page: 1 } })}>
@@ -110,8 +126,9 @@ export function SearchPage() {
         </label>
       </form>
 
+      {params.topic && <p className="notice" role="status">Тема классификации: <strong>{taxonomy.data?.topics.find(topic => topic.id === params.topic)?.label ?? params.topic}</strong>. Фильтр доступен только в лексическом поиске; машинные метки могут быть непроверенными. {" "}<button type="button" onClick={() => void navigate({ search: selectSearchTopic(params, "") })}>Убрать тему</button></p>}
       {!searching ? (
-        <div className="notice">Введите запрос. Поиск идёт по названию (вес выше) и тексту всех постов темы.</div>
+        <div className="notice">Введите запрос или выберите тему. Поиск идёт по названию (вес выше) и тексту всех постов темы.</div>
       ) : query.isPending ? <Loading /> : query.isError ? (
         <IndexProblem error={query.error} rebuild={rebuild} retry={() => void query.refetch()} />
       ) : data && (

@@ -48,6 +48,20 @@ pub async fn execute(
             ));
         }
     };
+    if let Some(topic) = &query.topic {
+        let taxonomy: serde_json::Value =
+            serde_json::from_str(include_str!("../../../tools/nlp/topics-v3.json"))
+                .expect("embedded v3 taxonomy must be valid");
+        if !taxonomy["topics"]
+            .as_array()
+            .is_some_and(|topics| topics.iter().any(|t| t["id"].as_str() == Some(topic)))
+        {
+            return Err(Error::InvalidQuery("unknown v3 topic"));
+        }
+    }
+    if query.topic.is_some() && query.mode != crate::search::semantic::Mode::Lexical {
+        return Err(Error::InvalidQuery("topic filter requires lexical mode"));
+    }
     let pool = query.pool.map_or(Ok(POOL), |pool| {
         let pool = pool as usize;
         if (MIN_POOL..=MAX_POOL).contains(&pool) {
@@ -76,6 +90,7 @@ pub async fn execute(
     let request_source = query.source.map(|source| source.as_str().to_owned());
     let filters = Filters {
         source: request_source.clone(),
+        topic: query.topic.clone(),
         complete_only: query.complete_only,
         year_from: query.year_from,
         year_to: query.year_to,
@@ -113,6 +128,7 @@ pub async fn execute(
             synonyms: query.synonyms,
             lemmas: query.lemmas,
             source: request_source,
+            topic: query.topic,
             complete_only: query.complete_only,
             year_from: query.year_from,
             year_to: query.year_to,

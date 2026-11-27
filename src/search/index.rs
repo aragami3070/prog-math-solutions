@@ -15,7 +15,7 @@ use tantivy::{
 };
 
 /// Bumped when a field is added or changed (2: `year`).
-const SCHEMA_VERSION: u32 = 2;
+const SCHEMA_VERSION: u32 = 3;
 const CURRENT: &str = "CURRENT";
 const MANIFEST: &str = "manifest.json";
 const WRITER_HEAP: usize = 100_000_000;
@@ -51,6 +51,7 @@ pub struct Fields {
     pub completeness: Field,
     /// Year of the first post (UTC); absent for documents without a date (every RFC).
     pub year: Field,
+    pub topic: Field,
 }
 
 fn schema() -> (Schema, Fields) {
@@ -72,6 +73,7 @@ fn schema() -> (Schema, Fields) {
         body: builder.add_text_field("body", text),
         completeness: builder.add_text_field("completeness", STRING | STORED),
         year: builder.add_i64_field("year", INDEXED),
+        topic: builder.add_text_field("topic", STRING | STORED),
     };
     (builder.build(), fields)
 }
@@ -86,6 +88,7 @@ pub struct IndexDocument {
     pub body: String,
     pub completeness: String,
     pub year: Option<i32>,
+    pub topics: Vec<String>,
 }
 
 fn first_schema() -> u32 {
@@ -236,6 +239,9 @@ impl Builder {
         document.add_text(f.title, doc.title);
         document.add_text(f.body, doc.body);
         document.add_text(f.completeness, doc.completeness);
+        for topic in doc.topics {
+            document.add_text(f.topic, topic);
+        }
         if let Some(year) = doc.year {
             document.add_i64(f.year, i64::from(year));
         }

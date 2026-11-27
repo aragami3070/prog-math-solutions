@@ -16,6 +16,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY .sqlx .sqlx
 COPY migrations migrations
 COPY src src
+COPY tools/nlp/topics-v3.json tools/nlp/topics-v3.json
 RUN cargo build --release --bin rust-knowledge
 
 FROM debian:stable-slim

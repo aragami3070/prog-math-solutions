@@ -15,6 +15,7 @@ const SHOWN_NEIGHBOURS = 30;
 
 type RelatedView = {
   generation: string;
+  topic_status?: "proposed" | "unclassified" | "missing";
   topics: { id: string; label: string; matched_terms: string[]; provenance: string; review_state: string }[];
   similar: { document_id: string; title: string; url: string; score: number; chunk_center: number; chunk_other: number; chunk_score: number; model: string; method: string; text_center: string | null; text_other: string | null; collection: string }[] | null;
 };
@@ -27,14 +28,18 @@ function RelatedCandidates({ document }: { document: string }) {
   });
   if (related.isPending) return <Loading />;
   if (related.isError) return <ErrorPanel error={related.error} retry={() => void related.refetch()} />;
-  const { topics, similar } = related.data;
+  const { topics, similar, topic_status = "missing" } = related.data;
   return (
     <section aria-label="Предварительные тематические связи">
       <h2>Темы и похожие документы</h2>
       <h3>Темы</h3>
-      {topics.length === 0 ? <p>По выбранным словам темы не определены.</p> : (
-        <ul>{topics.map(topic => <li key={topic.id}><strong>{topic.label}</strong> <small>({topic.id})</small> - слова: {topic.matched_terms.join(", ")}</li>)}</ul>
-      )}
+      {topic_status === "unclassified" ? <p>Классификация выполнена, но оснований для назначения темы недостаточно (unclassified).</p> : topic_status === "missing" ? <>
+        <p>Результат классификации отсутствует. Ниже показаны предварительные темы по ключевым словам, а не машинные метки.</p>
+        {topics.length === 0 ? <p>По ключевым словам темы не найдены.</p> : <ul>{topics.map(topic => <li key={topic.id}><strong>{topic.label}</strong> <small>({topic.id})</small> - слова: {topic.matched_terms.join(", ")}</li>)}</ul>}
+      </> : <>
+        <p>Метки v3 с указанным состоянием проверки. Нажмите на тему для лексического поиска по присвоенным меткам.</p>
+        {topics.length === 0 ? <p>Темы в результате отсутствуют.</p> : <ul>{topics.map(topic => <li key={topic.id}><a href={`/search?topic=${encodeURIComponent(topic.id)}`}>{topic.label}</a> <small>({topic.id}; {topic.provenance}; {topic.review_state})</small></li>)}</ul>}
+      </>}
       <h3>Похожие документы</h3>
       {similar === null ? <p>Файл data/similar.jsonl отсутствует: кандидаты недоступны.</p> : similar.length === 0 ? <p>В подготовленном снимке кандидатов для этого документа нет.</p> : (
         <ol>{similar.map(item => <li key={item.document_id}>

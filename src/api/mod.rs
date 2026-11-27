@@ -6,6 +6,7 @@ pub mod health;
 pub mod search;
 pub mod sources;
 pub mod statistics;
+pub mod taxonomy;
 
 use crate::{
     config::Config,
@@ -69,6 +70,7 @@ impl AppState {
 #[openapi(
     paths(
         health::check,
+        taxonomy::get_taxonomy,
         sources::documents,
         sources::export,
         statistics::get_statistics,
@@ -122,6 +124,7 @@ pub struct ApiDoc;
 pub fn router(state: AppState, web_dist: &std::path::Path) -> Router {
     let api = Router::new()
         .merge(health::router())
+        .merge(taxonomy::router())
         .merge(sources::router())
         .merge(search::router())
         .merge(graph::router())

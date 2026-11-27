@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { pagination, searchParams, searchPath } from "./pagination";
+import { pagination, searchParams, searchPath, selectSearchTopic } from "./pagination";
 import { download, exportUrl, get, startCrawl } from "./client";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -69,4 +69,8 @@ it("validates search parameters from the URL", () => {
   expect(searchParams({ q: "x", year_from: "2019", year_to: "2020" })).toMatchObject({ year_from: 2019, year_to: 2020 });
   expect(searchParams({ q: "x", year_from: "1800", year_to: "abc" })).not.toHaveProperty("year_from");
   expect(searchParams({ q: "x", year_to: "abc" })).not.toHaveProperty("year_to");
+  const topic = searchParams({ topic: "async-await", mode: "hybrid", page: "2" });
+  expect(topic).toMatchObject({ q: "", topic: "async-await", mode: "lexical", page: 2 });
+  expect(new URL(searchPath(topic), "http://localhost").searchParams.get("topic")).toBe("async-await");
+  expect(searchParams({ topic: "invalid topic" })).not.toHaveProperty("topic");
 });

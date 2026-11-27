@@ -8,8 +8,8 @@ use tantivy::{
     TantivyDocument, Term,
     collector::{Count, TopDocs},
     query::{
-        BooleanQuery, BoostQuery, ConstScoreQuery, FuzzyTermQuery, Occur, PhraseQuery, Query,
-        RangeQuery, TermQuery,
+        AllQuery, BooleanQuery, BoostQuery, ConstScoreQuery, FuzzyTermQuery, Occur, PhraseQuery,
+        Query, RangeQuery, TermQuery,
     },
     schema::{Field, IndexRecordOption, Value},
     snippet::SnippetGenerator,
@@ -45,6 +45,7 @@ const SNIPPET_CHARS: usize = 240;
 #[derive(Debug, Default, Clone)]
 pub struct Filters {
     pub source: Option<String>,
+    pub topic: Option<String>,
     pub complete_only: bool,
     /// Year of the first post, inclusive bounds. Documents without a date never match.
     pub year_from: Option<i32>,
@@ -140,13 +141,40 @@ impl SearchIndex {
         options: Options,
     ) -> Result<(Box<dyn Query>, Rewrite), Error> {
         let text = text.trim();
-        if text.is_empty() {
+        if text.is_empty() && filters.topic.is_none() {
             return Err(Error::InvalidQuery("query must not be empty"));
         }
         if text.chars().count() > MAX_QUERY_CHARS {
             return Err(Error::InvalidQuery("query is limited to 200 characters"));
         }
         let f = self.fields;
+        if text.is_empty() {
+            let mut must: Vec<(Occur, Box<dyn Query>)> = vec![(Occur::Must, Box::new(AllQuery))];
+            if let Some(topic) = &filters.topic {
+                must.push((Occur::Must, filter(f.topic, topic)));
+            }
+            if let Some(source) = &filters.source {
+                must.push((Occur::Must, filter(f.source, source)));
+            }
+            if filters.complete_only {
+                must.push((Occur::Must, filter(f.completeness, "complete")));
+            }
+            if filters.year_from.is_some() || filters.year_to.is_some() {
+                let bound = |year: Option<i32>| {
+                    year.map_or(Bound::Unbounded, |y| {
+                        Bound::Included(Term::from_field_i64(f.year, i64::from(y)))
+                    })
+                };
+                must.push((
+                    Occur::Must,
+                    Box::new(RangeQuery::new(
+                        bound(filters.year_from),
+                        bound(filters.year_to),
+                    )),
+                ));
+            }
+            return Ok((Box::new(BooleanQuery::new(must)), Rewrite::default()));
+        }
         let mut should: Vec<(Occur, Box<dyn Query>)> = Vec::new();
 
         // Exact identifiers outrank everything: `rfc:3058`, `RFC 3058`, a bare `3058`.
@@ -257,6 +285,9 @@ impl SearchIndex {
         }
         let mut must: Vec<(Occur, Box<dyn Query>)> =
             vec![(Occur::Must, Box::new(BooleanQuery::new(should)))];
+        if let Some(topic) = &filters.topic {
+            must.push((Occur::Must, filter(f.topic, topic)));
+        }
         if let Some(source) = &filters.source {
             must.push((Occur::Must, filter(f.source, source)));
         }
@@ -394,6 +425,7 @@ pub struct StoredDocument {
     pub url: String,
     pub completeness: String,
     pub body: String,
+    pub topics: Vec<String>,
 }
 
 impl SearchIndex {
@@ -416,6 +448,10 @@ impl SearchIndex {
             url: self.stored_text(&doc, f.url),
             completeness: self.stored_text(&doc, f.completeness),
             body: self.stored_text(&doc, f.body),
+            topics: doc
+                .get_all(f.topic)
+                .filter_map(|v| v.as_str().map(str::to_owned))
+                .collect(),
         }))
     }
 }
