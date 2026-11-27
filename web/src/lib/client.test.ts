@@ -54,8 +54,21 @@ it("builds a search path with only the filters that are set", () => {
   expect([pooled("vector"), pooled("lexical")]).toEqual(["300", null]);
   expect(searchParams({ q: "x", pool: "300" }).pool).toBe(300);
   expect(searchParams({ q: "x", pool: "7" }).pool).toBeUndefined();
-  const period = new URL(searchPath({ ...params, year_from: 2019, year_to: 2020 }), "http://localhost");
-  expect([period.searchParams.get("year_from"), period.searchParams.get("year_to")]).toEqual(["2019", "2020"]);
+  const oldLink = searchParams({ q: "x", year_from: "2019", year_to: "2020" });
+  const oldLinkUrl = new URL(searchPath(oldLink), "http://localhost");
+  expect([oldLinkUrl.searchParams.get("year_from"), oldLinkUrl.searchParams.get("year_to")]).toEqual([null, null]);
+});
+
+it("selects and clears a topic, resetting pagination and allowing an empty query", () => {
+  const initial = searchParams({ q: "", mode: "hybrid", page: "4", source: "rfc" });
+  const selected = selectSearchTopic(initial, "ownership-borrowing");
+  expect(selected).toMatchObject({ q: "", topic: "ownership-borrowing", mode: "lexical", page: 1, source: "rfc" });
+  const url = new URL(searchPath(selected), "http://localhost");
+  expect(url.searchParams.get("q")).toBe("");
+  expect(url.searchParams.get("topic")).toBe("ownership-borrowing");
+  const cleared = selectSearchTopic({ ...selected, page: 3 }, "");
+  expect(cleared).toMatchObject({ topic: undefined, mode: "lexical", page: 1 });
+  expect(new URL(searchPath(cleared), "http://localhost").searchParams.has("topic")).toBe(false);
 });
 
 it("validates search parameters from the URL", () => {
@@ -66,7 +79,7 @@ it("validates search parameters from the URL", () => {
   expect(searchParams({ q: "x" }).fuzzy_match).toBe(false);
   expect(searchParams({ q: "x", fuzzy_match: "true" }).fuzzy_match).toBe(true);
   expect(searchParams({ q: "a".repeat(500) }).q).toHaveLength(200);
-  expect(searchParams({ q: "x", year_from: "2019", year_to: "2020" })).toMatchObject({ year_from: 2019, year_to: 2020 });
+  expect(searchParams({ q: "x", year_from: "2019", year_to: "2020" })).not.toHaveProperty("year_from");
   expect(searchParams({ q: "x", year_from: "1800", year_to: "abc" })).not.toHaveProperty("year_from");
   expect(searchParams({ q: "x", year_to: "abc" })).not.toHaveProperty("year_to");
   const topic = searchParams({ topic: "async-await", mode: "hybrid", page: "2" });

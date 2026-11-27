@@ -54,6 +54,7 @@ export function SearchPage() {
         refreshing={query.isFetching}
       />
       <form className="search-form" role="search" onSubmit={submit}>
+        <div className="search-query">
         <input
           type="search"
           value={draft}
@@ -63,7 +64,9 @@ export function SearchPage() {
           onChange={event => setDraft(event.target.value)}
         />
         <button type="submit" disabled={draft.trim() === "" && !params.topic}>Найти</button>
-        <label>
+        </div>
+        <div className="search-filters">
+        <label className="search-field">
           Режим{" "}
           <select value={params.mode} disabled={!!params.topic} onChange={event => void navigate({ search: { ...params, mode: event.target.value as typeof params.mode, page: 1 } })}>
             <option value="lexical">Лексический</option>
@@ -71,7 +74,8 @@ export function SearchPage() {
             <option value="hybrid">Гибридный</option>
           </select>
         </label>
-        <label>
+        <div className="search-topic">
+        <label className="search-field">
           Тема{" "}
           <select value={params.topic ?? ""} onChange={event => void navigate({ search: selectSearchTopic(params, event.target.value) })}>
             <option value="">Все темы</option>
@@ -81,29 +85,25 @@ export function SearchPage() {
         </label>
         {taxonomy.isPending && <span role="status">Загрузка тем…</span>}
         {taxonomy.isError && <span role="alert">Не удалось загрузить темы. <button type="button" onClick={() => void taxonomy.refetch()}>Повторить</button></span>}
-        <label>
+        </div>
+        <label className="search-field">
           Источник{" "}
           <select value={params.source} onChange={event => void navigate({ search: { ...params, source: event.target.value as typeof params.source, page: 1 } })}>
             <option value="">Все</option>
             {SOURCES.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
         </label>
-        <label>
-          Период, с{" "}
-          <input type="number" min={1990} max={2100} placeholder="год" style={{ width: "5em" }} value={params.year_from ?? ""} onChange={event => void navigate({ search: { ...params, year_from: event.target.value === "" ? undefined : Number(event.target.value), page: 1 } })} />
-        </label>
-        <label>
-          по{" "}
-          <input type="number" min={1990} max={2100} placeholder="год" style={{ width: "5em" }} value={params.year_to ?? ""} onChange={event => void navigate({ search: { ...params, year_to: event.target.value === "" ? undefined : Number(event.target.value), page: 1 } })} />
-        </label>
         {params.mode !== "lexical" && (
-          <label title="Сколько кандидатов даёт каждый список (векторный и лексический). Глубже этого число результатов не листается; больше пул — дальше по выдаче и дороже запрос.">
+          <label className="search-field" title="Сколько кандидатов даёт каждый список (векторный и лексический). Глубже этого число результатов не листается; больше пул — дальше по выдаче и дороже запрос.">
             Пул кандидатов{" "}
             <select value={params.pool ?? 100} onChange={event => void navigate({ search: { ...params, pool: Number(event.target.value), page: 1 } })}>
               {POOL_SIZES.map(size => <option key={size} value={size}>{size}</option>)}
             </select>
           </label>
         )}
+        </div>
+        <fieldset className="search-options">
+        <legend>Дополнительные параметры</legend>
         <label>
           <input type="checkbox" checked={params.complete_only} onChange={event => void navigate({ search: { ...params, complete_only: event.target.checked, page: 1 } })} />{" "}
           Только полные
@@ -124,6 +124,7 @@ export function SearchPage() {
           <input type="checkbox" checked={params.lemmas} onChange={event => void navigate({ search: { ...params, lemmas: event.target.checked, page: 1 } })} />{" "}
           Формы слов
         </label>
+        </fieldset>
       </form>
 
       {params.topic && <p className="notice" role="status">Тема классификации: <strong>{taxonomy.data?.topics.find(topic => topic.id === params.topic)?.label ?? params.topic}</strong>. Фильтр доступен только в лексическом поиске; машинные метки могут быть непроверенными. {" "}<button type="button" onClick={() => void navigate({ search: selectSearchTopic(params, "") })}>Убрать тему</button></p>}

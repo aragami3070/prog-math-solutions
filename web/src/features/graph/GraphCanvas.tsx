@@ -28,6 +28,10 @@ interface Props {
 }
 
 const FONT = "Inter, ui-sans-serif, system-ui, sans-serif";
+// Keep only the most recent graph, and use the full serialized input rather than a
+// lossy hash: order also matters to d3's initial positions and force iteration.
+const LAYOUT_VERSION = 1;
+let layoutCache: { key: string; positions: { x: number; y: number }[] } | null = null;
 
 /**
  * The reference graph as a picture: a force layout on a canvas. Every node is a document, sized
@@ -47,7 +51,18 @@ export function GraphCanvas({ nodes, edges, selectedId, focus, onSelect }: Props
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
     const dpr = window.devicePixelRatio || 1;
-    const simNodes: SimNode[] = nodes.map(node => ({ ...node, r: 3 + Math.sqrt(node.degree) * 2 }));
+    const key = JSON.stringify([LAYOUT_VERSION, nodes, edges]);
+    const cached = layoutCache?.key === key ? layoutCache.positions : null;
+    const simNodes: SimNode[] = nodes.map((node, i) => ({
+      ...node, r: 3 + Math.sqrt(node.degree) * 2,
+      ...(cached ? { x: cached[i].x, y: cached[i].y } : {}),
+    }));
+    let layoutComplete = !!cached;
+    let layoutTimer: ReturnType<typeof setTimeout> | undefined;
+    const saveLayout = () => {
+      if (!layoutComplete) return;
+      layoutCache = { key, positions: simNodes.map(node => ({ x: node.x ?? 0, y: node.y ?? 0 })) };
+    };
     const byId = new Map(simNodes.map(node => [node.id, node]));
     const links: SimLink[] = [];
     const neighbours = new Map<string, Set<string>>();
@@ -141,6 +156,7 @@ export function GraphCanvas({ nodes, edges, selectedId, focus, onSelect }: Props
     };
 
     const nodeAt = (px: number, py: number): SimNode | null => {
+      if (!layoutComplete) return null;
       const [x, y] = transform.invert([px, py]);
       let best: SimNode | null = null;
       let bestDistance = Infinity;
@@ -179,18 +195,20 @@ export function GraphCanvas({ nodes, edges, selectedId, focus, onSelect }: Props
       .force("x", forceX<SimNode>(0).strength(0.05))
       .force("y", forceY<SimNode>(0).strength(0.05))
       .stop();
-    simulation.tick(300);
 
     view.call(zoomBehavior).on("dblclick.zoom", null);
-    if (simNodes.length > 0) {
-      const xs = simNodes.map(node => node.x ?? 0);
-      const ys = simNodes.map(node => node.y ?? 0);
-      const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-      const fit = Math.min(width / Math.max(x1 - x0, 1), height / Math.max(y1 - y0, 1)) * 0.9;
-      moveTo((x0 + x1) / 2, (y0 + y1) / 2, Math.min(Math.max(fit, 0.1), 2));
-    }
-    const first = byId.get(live.current.selectedId);
-    if (first) moveTo(first.x ?? 0, first.y ?? 0, 1.6);
+    const fitGraph = () => {
+      if (simNodes.length > 0) {
+        const xs = simNodes.map(node => node.x ?? 0);
+        const ys = simNodes.map(node => node.y ?? 0);
+        const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+        const fit = Math.min(width / Math.max(x1 - x0, 1), height / Math.max(y1 - y0, 1)) * 0.9;
+        moveTo((x0 + x1) / 2, (y0 + y1) / 2, Math.min(Math.max(fit, 0.1), 2));
+      }
+      const first = byId.get(live.current.selectedId);
+      if (first) moveTo(first.x ?? 0, first.y ?? 0, 1.6);
+    };
+    if (cached) fitGraph();
 
     const dragger = drag<HTMLCanvasElement, unknown, DragSubject>()
       .subject(event => {
@@ -242,7 +260,25 @@ export function GraphCanvas({ nodes, edges, selectedId, focus, onSelect }: Props
     canvas.addEventListener("dblclick", onDouble);
     const observer = new ResizeObserver(resize);
     observer.observe(canvas);
-    simulation.on("tick", schedule).alpha(0.3).restart();
+    simulation.on("tick", schedule).on("end", saveLayout);
+    if (!cached) {
+      let remaining = 300;
+      const calculate = () => {
+        // Yield between small batches so input and painting can run during layout.
+        const count = Math.min(5, remaining);
+        simulation.tick(count);
+        remaining -= count;
+        if (remaining > 0) {
+          layoutTimer = setTimeout(calculate, 0);
+        } else {
+          layoutComplete = true;
+          saveLayout();
+          fitGraph();
+          schedule();
+        }
+      };
+      layoutTimer = setTimeout(calculate, 0);
+    }
 
     api.current = {
       redraw: schedule,
@@ -256,6 +292,8 @@ export function GraphCanvas({ nodes, edges, selectedId, focus, onSelect }: Props
     return () => {
       api.current = null;
       simulation.stop();
+      if (layoutTimer !== undefined) clearTimeout(layoutTimer);
+      saveLayout();
       cancelAnimationFrame(frame);
       observer.disconnect();
       canvas.removeEventListener("pointermove", onMove);

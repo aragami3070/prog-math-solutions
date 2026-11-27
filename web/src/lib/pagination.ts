@@ -27,17 +27,9 @@ export interface SearchParams {
   /** Fuzzy matching inside the index (edit distance); off unless the URL turns it on. */
   fuzzy_match: boolean;
   mode: SearchMode;
-  /** Year of the first post, inclusive; RFCs have no date and are left out when a bound is set. */
-  year_from?: number;
-  year_to?: number;
   /** Candidates per ranking in vector and hybrid modes; omitted means the server default. */
   pool?: number;
   page: number;
-}
-
-function year(value: unknown): number | undefined {
-  const n = Number(value);
-  return value !== undefined && value !== "" && Number.isInteger(n) && n >= 1990 && n <= 2100 ? n : undefined;
 }
 
 /** Validates `/search?q=&source=&complete_only=&page=` from the URL. */
@@ -54,8 +46,6 @@ export function searchParams(search: Record<string, unknown>): SearchParams {
     lemmas: search.lemmas === true || search.lemmas === "true",
     fuzzy_match: search.fuzzy_match === true || search.fuzzy_match === "true",
     mode: topic ? "lexical" : search.mode === "vector" || search.mode === "hybrid" ? search.mode : "lexical",
-    ...(year(search.year_from) !== undefined && { year_from: year(search.year_from) }),
-    ...(year(search.year_to) !== undefined && { year_to: year(search.year_to) }),
     ...(POOL_SIZES.includes(Number(search.pool)) && { pool: Number(search.pool) }),
     page: Number.isInteger(page) && page >= 1 && page <= 1_000_000 ? page : 1,
   };
@@ -67,7 +57,7 @@ export function selectSearchTopic(params: SearchParams, topic: string): SearchPa
 }
 
 /** The API path for a search; `page_size` is fixed. */
-export function searchPath({ q, topic, source, complete_only, fuzzy, synonyms, lemmas, fuzzy_match, mode, year_from, year_to, pool, page }: SearchParams, pageSize = 20) {
+export function searchPath({ q, topic, source, complete_only, fuzzy, synonyms, lemmas, fuzzy_match, mode, pool, page }: SearchParams, pageSize = 20) {
   const query = new URLSearchParams({ q, page: String(page), page_size: String(pageSize) });
   if (topic) query.set("topic", topic);
   if (source) query.set("source", source);
@@ -77,8 +67,6 @@ export function searchPath({ q, topic, source, complete_only, fuzzy, synonyms, l
   if (lemmas) query.set("lemmas", "true");
   if (fuzzy_match) query.set("fuzzy_match", "true");
   if (mode !== "lexical") query.set("mode", mode);
-  if (year_from !== undefined) query.set("year_from", String(year_from));
-  if (year_to !== undefined) query.set("year_to", String(year_to));
   if (pool !== undefined && mode !== "lexical") query.set("pool", String(pool));
   return `/api/search?${query}`;
 }
