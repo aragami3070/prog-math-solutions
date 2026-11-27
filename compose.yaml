@@ -17,6 +17,10 @@ services:
   # Vector store for semantic search. Optional: without it search degrades to lexical.
   qdrant:
     image: qdrant/qdrant:v1.12.4
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     ports:
       - "127.0.0.1:6333:6333"
     volumes:
