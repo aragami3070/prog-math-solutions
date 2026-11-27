@@ -1,0 +1,90 @@
+{
+  "version": "v3",
+  "topics": [
+    {
+      "id": "ownership-borrowing",
+      "label": "Владение и заимствование",
+      "definition": "Ownership, borrowing, moves, and borrow checking in Rust; exclude incidental use of these concepts."
+    },
+    {
+      "id": "lifetimes",
+      "label": "Времена жизни",
+      "definition": "Lifetime annotations, inference, elision, and relationships between lifetimes; exclude incidental references."
+    },
+    {
+      "id": "traits-generics",
+      "label": "Трейты и обобщения",
+      "definition": "Traits, trait implementations, bounds, generic programming, and associated items."
+    },
+    {
+      "id": "async-concurrency",
+      "label": "Асинхронность и конкурентность",
+      "definition": "Async and await, futures, concurrent or parallel execution, synchronization, and related design."
+    },
+    {
+      "id": "type-system",
+      "label": "Система типов",
+      "definition": "Type checking, type inference, type relationships and type-system design; exclude mere use of a type."
+    },
+    {
+      "id": "error-handling",
+      "label": "Обработка ошибок",
+      "definition": "Representing, propagating, recovering from, or reporting application errors and panics."
+    },
+    {
+      "id": "macros",
+      "label": "Макросы",
+      "definition": "Declarative and procedural macros, expansion, hygiene and macro design."
+    },
+    {
+      "id": "unsafe-memory",
+      "label": "Unsafe и память",
+      "definition": "Unsafe Rust, memory safety, pointers, layout, aliasing or undefined behavior."
+    },
+    {
+      "id": "compiler",
+      "label": "Компилятор",
+      "definition": "Rust compiler implementation, compilation pipeline, diagnostics and compiler architecture; exclude generic language design alone."
+    },
+    {
+      "id": "libraries",
+      "label": "Библиотеки",
+      "definition": "Design, implementation, behavior, evolution or APIs of Rust libraries and crates, including the standard library and external libraries; exclude incidental use of a library."
+    },
+    {
+      "id": "cargo-tooling",
+      "label": "Cargo и инструменты",
+      "definition": "Cargo, package management, build tooling and developer tools such as rustfmt and clippy."
+    },
+    {
+      "id": "performance",
+      "label": "Производительность",
+      "definition": "Performance measurement, optimization, runtime efficiency or compile-time performance; exclude unsupported incidental claims."
+    },
+    {
+      "id": "syntax-ergonomics",
+      "label": "Синтаксис и эргономика",
+      "definition": "Rust syntax, surface-language usability, readability and developer ergonomics."
+    },
+    {
+      "id": "language-process",
+      "label": "Развитие языка",
+      "definition": "Rust language governance, RFC process, stabilization, editions and language evolution as a process; exclude RFCs solely because they are RFCs."
+    },
+    {
+      "id": "modules-paths",
+      "label": "Модули и пути",
+      "definition": "Rust module system, paths, visibility, imports, and organization of modules and crates; exclude incidental use of imports or paths."
+    },
+    {
+      "id": "documentation",
+      "label": "Документация",
+      "definition": "Writing, organizing, generating or improving Rust documentation, including rustdoc and documentation tooling; exclude incidental documentation mentions."
+    },
+    {
+      "id": "ffi-platform-compatibility",
+      "label": "FFI и совместимость платформ",
+      "definition": "Foreign function interfaces, interoperability with other languages or native libraries, target platforms, platform-specific behavior, portability and cross-platform compatibility; exclude incidental platform mentions."
+    }
+  ]
+}

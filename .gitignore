@@ -13,3 +13,4 @@ __pycache__
 /rks-transfer
 *.json
 eval/
+!topics-v*.json
