@@ -419,14 +419,22 @@ fn score(options: &HashMap<String, String>) -> Result<()> {
             slice(&queries, &scored, |q| q.language == language),
         );
     }
-    let report = json!({ "run": meta, "slices": slices, "per_query": scored.per_query });
+    // The judgments the numbers are computed from: without this a report cannot be compared with
+    // another one, because a new label can change the metrics of every variant.
+    let qrels_path = PathBuf::from(EVAL).join("qrels.tsv");
+    let qrels_bytes = fs::read(&qrels_path)?;
+    let qrels = json!({
+        "judgments": qrels_bytes.iter().filter(|b| **b == b'\n').count(),
+        "sha256": format!("{:x}", Sha256::digest(&qrels_bytes)),
+    });
+    let report = json!({ "run": meta, "qrels": qrels, "slices": slices, "per_query": scored.per_query });
     fs::write(
         dir.join(format!("{variant}.json")),
         serde_json::to_vec_pretty(&report)?,
     )?;
     let fmt = |v: Option<f64>| v.map_or("—".to_owned(), |v| format!("{v:.3}"));
     let mut md = format!(
-        "# Отчёт: {variant}\n\n- корпус: {} документов, sha256 `{}`\n- индекс: поколение `{}`, анализатор `{}`\n- запросов: {}, глубина оценки: top-10\n\n\
+        "# Отчёт: {variant}\n\n- корпус: {} документов, sha256 `{}`\n- индекс: поколение `{}`, анализатор `{}`\n- запросов: {}, глубина оценки: top-10\n- оценки: qrels, {} строк, sha256 `{}`\n\n\
          Оценки `llm-silver`, если не указано иное: см. `eval/judgments.jsonl` (assessor, evidence). nDCG, P, MRR, recall считаются по запросам с известными релевантными документами; запросы без них — отдельно.\n\n\
          | срез | запросов | с релевантными | nDCG@10 | P@10 | strict P@10 | MRR@10 | pooled recall@10 | покрытие оценками@10 | без ответа / с выдачей |\n|---|---|---|---|---|---|---|---|---|---|\n",
         meta["corpus_documents"],
@@ -434,6 +442,8 @@ fn score(options: &HashMap<String, String>) -> Result<()> {
         meta["index_generation"].as_str().unwrap_or(""),
         meta["analyzer_version"].as_str().unwrap_or(""),
         queries.len(),
+        qrels["judgments"],
+        qrels["sha256"].as_str().unwrap_or(""),
     );
     for (name, s) in &slices {
         md.push_str(&format!(
