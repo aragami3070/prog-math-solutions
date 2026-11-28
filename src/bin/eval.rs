@@ -1,5 +1,6 @@
 //! Offline search evaluation. Reads the database and the search index; never the sources.
 //!
+//!   eval                                   everything: rebuild, every variant, the table
 //!   eval rebuild                          rebuild the index from the database
 //!   eval run   --variant b0               run every query, write eval/runs/<variant>.tsv + .meta.json
 //!   eval pool  --runs a.tsv,b.tsv         write eval/pool.jsonl for judging (shuffled, no scores)
@@ -12,6 +13,7 @@
 //!   eval online-report --events f.jsonl --synthetic yes  | --db yes     A/B report -> eval/online/<name>.{json,md}
 use anyhow::{Context, Result, bail, ensure};
 use rust_knowledge::{
+    models::search::RebuildResult,
     evaluation::{
         Query, QueryMetrics, Summary, bootstrap_diff, evaluate_query, group_runs, read_qrels,
         read_queries, read_run, summarize,
@@ -43,6 +45,8 @@ fn main() -> Result<()> {
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(async {
         match command.as_str() {
+            // Without a command the whole evaluation runs: rebuild, every variant, the table.
+            "" | "all" => all().await,
             "rebuild" => rebuild_index().await,
             "run" => run(&options).await,
             "pool" => pool(&options),
@@ -54,7 +58,7 @@ fn main() -> Result<()> {
             "online-simulate" => online_simulate(&options),
             "online-report" => online_report(&options).await,
             _ => bail!(
-                "usage: eval rebuild | run | pool | qrels | score | compare (see the file header)"
+                "usage: eval [all | rebuild | run | pool | qrels | score | compare | review | agreement | online-*] (see the file header)"
             ),
         }
     })
@@ -105,6 +109,16 @@ async fn rebuild_index() -> Result<()> {
     Ok(())
 }
 
+/// The same, but the result is returned instead of printed: the full run reports it itself.
+async fn rebuild_index_quiet() -> Result<RebuildResult> {
+    let pool = pool_connection().await?;
+    let handle = handle();
+    let mut tx = pool
+        .begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+        .await?;
+    Ok(rebuild::execute(&mut tx, &handle).await?)
+}
+
 /// A fingerprint of the corpus the index was built from: every document and its content hash.
 async fn corpus_fingerprint(pool: &sqlx::PgPool) -> Result<(String, i64)> {
     let rows: Vec<(String, String, String)> = sqlx::query_as(
@@ -122,25 +136,39 @@ async fn corpus_fingerprint(pool: &sqlx::PgPool) -> Result<(String, i64)> {
 
 async fn run(options: &HashMap<String, String>) -> Result<()> {
     let variant = option(options, "variant")?;
-    let queries = read_queries(&PathBuf::from(EVAL).join("queries.jsonl"))?;
-    let index = handle()
-        .current()
-        .context("no index: run `eval rebuild` first")?;
-    let pool = pool_connection().await?;
-    let (corpus_sha256, documents) = corpus_fingerprint(&pool).await?;
     let mode = match options.get("mode").map(String::as_str).unwrap_or("lexical") {
         "lexical" => Mode::Lexical,
         "vector" => Mode::Vector,
         "hybrid" => Mode::Hybrid,
         other => anyhow::bail!("unknown --mode {other}"),
     };
-    let semantic = Semantic::from_env();
     let rewriting = Options {
         fuzzy: options.get("fuzzy").is_some_and(|v| v == "on"),
         fuzzy_match: options.get("fuzzy_match").is_some_and(|v| v == "on"),
         synonyms: options.get("synonyms").is_some_and(|v| v == "on"),
         lemmas: options.get("lemmas").is_some_and(|v| v == "on"),
     };
+    let meta = run_variant(variant, mode, rewriting, true).await?;
+    println!("{}", serde_json::to_string_pretty(&meta)?);
+    Ok(())
+}
+
+/// Runs every query of one variant against the current index and writes the run and its
+/// passport. The variant decides the mode and the rewriting modes; nothing else differs
+/// between the runs, so the comparison between them is fair.
+async fn run_variant(
+    variant: &str,
+    mode: Mode,
+    rewriting: Options,
+    explain: bool,
+) -> Result<Value> {
+    let queries = read_queries(&PathBuf::from(EVAL).join("queries.jsonl"))?;
+    let index = handle()
+        .current()
+        .context("no index: run `eval rebuild` first")?;
+    let pool = pool_connection().await?;
+    let (corpus_sha256, documents) = corpus_fingerprint(&pool).await?;
+    let semantic = Semantic::from_env();
     let mut lines = String::new();
     let mut empty = 0;
     for query in &queries {
@@ -169,7 +197,7 @@ async fn run(options: &HashMap<String, String>) -> Result<()> {
                 if let Some(reason) = &found.degraded {
                     anyhow::bail!("{} degraded: {reason}", query.query_id);
                 }
-                if !found.rewrite.is_empty() {
+                if explain && !found.rewrite.is_empty() {
                     eprintln!(
                         "{} {:?}: {} -> {:?}",
                         query.query_id,
@@ -236,8 +264,7 @@ async fn run(options: &HashMap<String, String>) -> Result<()> {
         dir.join(format!("{variant}.meta.json")),
         serde_json::to_vec_pretty(&meta)?,
     )?;
-    println!("{}", serde_json::to_string_pretty(&meta)?);
-    Ok(())
+    Ok(meta)
 }
 
 /// Union of the top results of the given runs, per query, in a fixed shuffled order with
@@ -383,6 +410,12 @@ fn slice<'a>(queries: &'a [Query], scored: &'a Scored, keep: impl Fn(&Query) -> 
 
 fn score(options: &HashMap<String, String>) -> Result<()> {
     let variant = option(options, "variant")?;
+    print!("{}", score_variant(variant)?);
+    Ok(())
+}
+
+/// The metrics of one variant, written to `eval/reports/<variant>.{json,md}`.
+fn score_variant(variant: &str) -> Result<String> {
     let (queries, scored) = evaluate(variant)?;
     let dir = PathBuf::from(EVAL).join("reports");
     fs::create_dir_all(&dir)?;
@@ -461,8 +494,266 @@ fn score(options: &HashMap<String, String>) -> Result<()> {
         ));
     }
     fs::write(dir.join(format!("{variant}.md")), md.as_bytes())?;
-    print!("{md}");
+    Ok(md)
+}
+
+/// One variant of the evaluation: the mode it searches in and the rewriting modes it turns
+/// on. The variants differ by one thing at a time, so each of them can be compared with the
+/// baseline and with the others.
+struct Variant {
+    name: &'static str,
+    mode: Mode,
+    rewriting: &'static [&'static str],
+}
+
+const VARIANTS: &[Variant] = &[
+    Variant { name: "b0", mode: Mode::Lexical, rewriting: &[] },
+    Variant { name: "b1-typo", mode: Mode::Lexical, rewriting: &["fuzzy"] },
+    Variant { name: "b1-fuzzymatch", mode: Mode::Lexical, rewriting: &["fuzzy_match"] },
+    Variant { name: "b2-syn", mode: Mode::Lexical, rewriting: &["synonyms"] },
+    Variant { name: "b3-typo-syn", mode: Mode::Lexical, rewriting: &["fuzzy", "synonyms"] },
+    Variant { name: "b4-lemma", mode: Mode::Lexical, rewriting: &["lemmas"] },
+    Variant {
+        name: "b5-all",
+        mode: Mode::Lexical,
+        rewriting: &["fuzzy", "fuzzy_match", "synonyms", "lemmas"],
+    },
+    Variant {
+        name: "v5-vector",
+        mode: Mode::Vector,
+        rewriting: &["fuzzy", "fuzzy_match", "synonyms", "lemmas"],
+    },
+    Variant { name: "v5-hybrid", mode: Mode::Hybrid, rewriting: &[] },
+    Variant {
+        name: "v5-hybrid-all",
+        mode: Mode::Hybrid,
+        rewriting: &["fuzzy", "fuzzy_match", "synonyms", "lemmas"],
+    },
+];
+
+/// Runs everything: rebuilds the index, runs every variant, scores it and prints the
+/// comparison table. This is what `eval` without a command does.
+async fn all() -> Result<()> {
+    println!("Пересборка индекса из базы...");
+    let rebuilt = rebuild_index_quiet().await?;
+    println!(
+        "  поколение {}, документов {}, {} мс\n",
+        rebuilt.generation, rebuilt.documents, rebuilt.took_ms
+    );
+    let mut results: Vec<(String, Mode, Vec<Query>, Scored, Summary)> = Vec::new();
+    for variant in VARIANTS {
+        let rewriting = Options {
+            fuzzy: variant.rewriting.contains(&"fuzzy"),
+            fuzzy_match: variant.rewriting.contains(&"fuzzy_match"),
+            synonyms: variant.rewriting.contains(&"synonyms"),
+            lemmas: variant.rewriting.contains(&"lemmas"),
+        };
+        print!("  {} ... ", variant.name);
+        match run_variant(variant.name, variant.mode, rewriting, false).await {
+            Ok(_) => {
+                score_variant(variant.name)?;
+                let (queries, scored) = evaluate(variant.name)?;
+                let summary = slice(&queries, &scored, |_| true);
+                println!("готово");
+                results.push((
+                    variant.name.to_owned(),
+                    variant.mode,
+                    queries,
+                    scored,
+                    summary,
+                ));
+            }
+            Err(error) => println!("пропущен: {error:#}"),
+        }
+    }
+    println!();
+    print_comparison(&results);
     Ok(())
+}
+
+/// The summary table: the variants, their metrics and the difference against the baseline.
+fn print_comparison(results: &[(String, Mode, Vec<Query>, Scored, Summary)]) {
+    let Some((baseline_name, _, queries, baseline, _)) = results.first() else {
+        println!("Ни один вариант не посчитан.");
+        return;
+    };
+    println!("Что посчитано:");
+    if let Some(meta) = passport() {
+        println!(
+            "  корпус: {} документов, sha256 {}",
+            meta["corpus_documents"].as_i64().unwrap_or_default(),
+            &meta["corpus_sha256"].as_str().unwrap_or("?")[..16]
+        );
+        println!(
+            "  индекс: поколение {}, анализатор {}",
+            meta["index_generation"].as_str().unwrap_or("?"),
+            meta["analyzer_version"].as_str().unwrap_or("?")
+        );
+    }
+    if let Some((count, sha)) = judgments_fingerprint() {
+        println!("  оценки: qrels, {count} строк, sha256 {}", &sha[..16]);
+    }
+    let baseline_summary = &results[0].4;
+    println!(
+        "  запросов: {}, из них с известными релевантными: {}; без ответа: {}, из них с выдачей: {}",
+        queries.len(),
+        baseline_summary.with_relevant,
+        baseline_summary.no_answer_queries,
+        baseline_summary.no_answer_with_results
+    );
+
+    let fmt = |v: Option<f64>| v.map_or("—".to_owned(), |v| format!("{v:.3}"));
+    let mut rows: Vec<Vec<String>> = Vec::new();
+    for (name, mode, _, scored, summary) in results {
+        let delta = if name == baseline_name {
+            "—".to_owned()
+        } else {
+            match delta_against(baseline, scored, queries) {
+                Some((diff, low, high)) => {
+                    format!("{diff:+.3} ({low:+.3} … {high:+.3})")
+                }
+                None => "—".to_owned(),
+            }
+        };
+        rows.push(vec![
+            name.clone(),
+            match mode {
+                Mode::Lexical => "лексика".to_owned(),
+                Mode::Vector => "вектор".to_owned(),
+                Mode::Hybrid => "гибрид".to_owned(),
+            },
+            VARIANTS
+                .iter()
+                .find(|v| v.name == name)
+                .map(|v| {
+                    if v.rewriting.is_empty() {
+                        "—".to_owned()
+                    } else {
+                        v.rewriting.join("+")
+                    }
+                })
+                .unwrap_or_default(),
+            fmt(summary.ndcg10),
+            fmt(slice(queries, scored, |q| q.split == "dev").ndcg10),
+            fmt(slice(queries, scored, |q| q.split == "test").ndcg10),
+            delta,
+            fmt(summary.p10),
+            fmt(summary.mrr10),
+            fmt(summary.pooled_recall10),
+        ]);
+    }
+    println!("\nСводка (nDCG@10 и P@10 — macro по запросам; Δ — парный bootstrap по группам запросов, 95% ДИ):");
+    print_table(
+        &[
+            "вариант".to_owned(),
+            "режим".to_owned(),
+            "переписывание".to_owned(),
+            "nDCG@10".to_owned(),
+            "dev".to_owned(),
+            "test".to_owned(),
+            "Δ против b0".to_owned(),
+            "P@10".to_owned(),
+            "MRR".to_owned(),
+            "recall".to_owned(),
+        ],
+        &rows,
+    );
+
+    let intents: Vec<String> = queries
+        .iter()
+        .map(|q| q.intent.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .filter(|intent| {
+            slice(queries, &results[0].3, |q| &q.intent == intent).with_relevant > 0
+        })
+        .collect();
+    let mut by_intent: Vec<Vec<String>> = Vec::new();
+    for (name, _, _, scored, _) in results {
+        let mut row = vec![name.clone()];
+        for intent in &intents {
+            let summary = slice(queries, scored, |q| &q.intent == intent);
+            row.push(fmt(summary.ndcg10));
+        }
+        by_intent.push(row);
+    }
+    let mut headers = vec!["вариант".to_owned()];
+    headers.extend(intents.iter().cloned());
+    println!("\nПо срезам (nDCG@10):");
+    print_table(&headers, &by_intent);
+    println!("\nПодробные отчёты: eval/reports/<вариант>.md и .json");
+}
+
+/// The difference between two rankings of the same queries, by paired bootstrap over the
+/// query groups (paraphrases of one need are not independent).
+fn delta_against(first: &Scored, second: &Scored, queries: &[Query]) -> Option<(f64, f64, f64)> {
+    let pairs: Vec<(String, f64, f64)> = queries
+        .iter()
+        .filter_map(|q| {
+            Some((
+                q.group.clone(),
+                first.per_query[&q.query_id].ndcg10?,
+                second.per_query[&q.query_id].ndcg10?,
+            ))
+        })
+        .collect();
+    bootstrap_diff(&pairs, 1, 10_000)
+}
+
+/// The passport of a run: what the numbers were computed from.
+fn passport() -> Option<Value> {
+    let dir = PathBuf::from(EVAL).join("runs");
+    let mut names: Vec<String> = fs::read_dir(&dir)
+        .ok()?
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().to_string())
+        .filter(|name| name.ends_with(".meta.json"))
+        .collect();
+    names.sort();
+    let name = names.first()?;
+    fs::read(dir.join(name)).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok())
+}
+
+/// The judgments the numbers are computed from.
+fn judgments_fingerprint() -> Option<(usize, String)> {
+    let bytes = fs::read(PathBuf::from(EVAL).join("qrels.tsv")).ok()?;
+    let count = bytes.iter().filter(|b| **b == b'\n').count();
+    Some((count, format!("{:x}", Sha256::digest(&bytes))))
+}
+
+/// A table with the columns aligned to their content.
+fn print_table(headers: &[String], rows: &[Vec<String>]) {
+    let mut widths: Vec<usize> = headers.iter().map(|h| h.chars().count()).collect();
+    for row in rows {
+        for (index, cell) in row.iter().enumerate() {
+            if index < widths.len() {
+                widths[index] = widths[index].max(cell.chars().count());
+            }
+        }
+    }
+    let line = |cells: &[String]| {
+        cells
+            .iter()
+            .enumerate()
+            .map(|(index, cell)| {
+                let width = widths.get(index).copied().unwrap_or(0);
+                format!("{cell:<width$}")
+            })
+            .collect::<Vec<_>>()
+            .join("  ")
+    };
+    println!("{}", line(headers));
+    println!(
+        "{}",
+        widths
+            .iter()
+            .map(|width| "-".repeat(*width))
+            .collect::<Vec<_>>()
+            .join("  ")
+    );
+    for row in rows {
+        println!("{}", line(row));
+    }
 }
 
 fn compare(options: &HashMap<String, String>) -> Result<()> {
