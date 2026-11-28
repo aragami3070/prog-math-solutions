@@ -20,6 +20,11 @@ pub const MAX_POOL: usize = 500;
 const CHUNKS_PER_DOCUMENT: usize = 3;
 /// Standard RRF damping constant.
 const RRF_K: f32 = 60.0;
+/// How much one vote of the vector ranking is worth next to one vote of the lexical ranking.
+/// The lexical ranking is the stronger one on this corpus, so the vector list gets a fraction
+/// of a vote: a document the lexical side did not find should not push it out. Chosen on the
+/// dev split; the test split was not used for it.
+const VECTOR_WEIGHT: f32 = 0.10;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
@@ -241,12 +246,13 @@ pub struct Answer {
 }
 
 /// Reciprocal rank fusion: documents ranked well by either list rise, those ranked by both
-/// rise most. Scores of the two rankings are not comparable, so only ranks are used.
-fn fuse(lists: &[Vec<String>]) -> Vec<(String, f32)> {
+/// rise most. Scores of the two rankings are not comparable, so only ranks are used. Each
+/// list carries a weight: the vector ranking is weaker than the lexical one on this corpus.
+fn fuse(lists: &[(Vec<String>, f32)]) -> Vec<(String, f32)> {
     let mut score: HashMap<&str, f32> = HashMap::new();
-    for list in lists {
+    for (list, weight) in lists {
         for (rank, id) in list.iter().enumerate() {
-            *score.entry(id).or_default() += 1.0 / (RRF_K + rank as f32 + 1.0);
+            *score.entry(id).or_default() += weight / (RRF_K + rank as f32 + 1.0);
         }
     }
     let mut fused: Vec<(String, f32)> = score.into_iter().map(|(k, v)| (k.to_owned(), v)).collect();
@@ -331,7 +337,7 @@ pub async fn answer(
             Err(error) => return Err(error),
         };
         let lexical_order: Vec<String> = hits.iter().map(|h| h.document_id.clone()).collect();
-        let mut fused = fuse(&[lexical_order, vector_order]);
+        let mut fused = fuse(&[(lexical_order, 1.0), (vector_order, VECTOR_WEIGHT)]);
         // A document the query names outright (`RFC 3058`) stays first: embeddings know
         // nothing about numbers, and rank fusion would bury it.
         let named: Vec<String> = super::query::exact_ids(&text)
@@ -410,14 +416,23 @@ mod tests {
     fn a_document_found_by_both_rankings_rises_above_one_found_by_one() {
         let lexical = vec!["a".to_owned(), "b".to_owned(), "c".to_owned()];
         let vector = vec!["c".to_owned(), "d".to_owned(), "b".to_owned()];
-        let fused = fuse(&[lexical, vector]);
+        let fused = fuse(&[(lexical, 1.0), (vector, 1.0)]);
         // b and c are in both lists; c is first in one, third in the other, b second and third.
         assert_eq!(ids(&fused), ["c", "b", "a", "d"]);
     }
 
     #[test]
     fn fusion_order_is_deterministic_on_ties() {
-        let fused = fuse(&[vec!["x".to_owned()], vec!["y".to_owned()]]);
+        let fused = fuse(&[(vec!["x".to_owned()], 1.0), (vec!["y".to_owned()], 1.0)]);
         assert_eq!(ids(&fused), ["x", "y"]);
+    }
+
+    #[test]
+    fn a_weak_vector_list_cannot_push_a_document_out_of_the_first_place() {
+        let lexical = vec!["a".to_owned()];
+        let vector = vec!["b".to_owned(), "c".to_owned(), "d".to_owned()];
+        // The vector list is weak: its first place is worth less than the lexical first place.
+        let fused = fuse(&[(lexical, 1.0), (vector, VECTOR_WEIGHT)]);
+        assert_eq!(ids(&fused)[0], "a");
     }
 }
