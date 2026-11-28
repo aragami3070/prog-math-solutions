@@ -168,7 +168,7 @@ struct Pair {
 }
 
 fn default_collection() -> String {
-    "rks_chunks_v1".to_owned()
+    "rks_chunks_all_v2".to_owned()
 }
 
 #[derive(Debug, Serialize, ToSchema)]

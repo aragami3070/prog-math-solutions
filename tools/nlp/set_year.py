@@ -14,7 +14,7 @@ import urllib.request
 from collections import defaultdict
 
 QDRANT = os.environ.get("QDRANT_URL", "http://127.0.0.1:6333")
-COLLECTION = os.environ.get("QDRANT_COLLECTION", "rks_chunks_v1")
+COLLECTION = os.environ.get("QDRANT_COLLECTION", "rks_chunks_all_v2")
 SQL = """COPY (
   SELECT d.source || ':' || d.native_id,
          EXTRACT(YEAR FROM p.published_at AT TIME ZONE 'UTC')::INT

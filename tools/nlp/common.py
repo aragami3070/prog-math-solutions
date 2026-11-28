@@ -1,8 +1,10 @@
 """Shared bits of the embedding tools: the model, its prefixes, the Qdrant collection name."""
 MODEL = "intfloat/multilingual-e5-small"
 DIM = 384
-CHUNKER_VERSION = "chunks-v1"
-COLLECTION = "rks_chunks_v1"
+# v2 embeds every chunk of every document; v1 kept only the first four chunks of a document,
+# which left the tail of two thirds of the corpus invisible to the vector side.
+CHUNKER_VERSION = "chunks-v2"
+COLLECTION = "rks_chunks_all_v2"
 # e5 models are trained with these prefixes; skipping them degrades retrieval.
 PREFIX = {"query": "query: ", "passage": "passage: "}
 

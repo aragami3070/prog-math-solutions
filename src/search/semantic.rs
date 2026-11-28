@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use utoipa::ToSchema;
 
-const COLLECTION: &str = "rks_chunks_v2";
+const COLLECTION: &str = "rks_chunks_all_v2";
 /// Candidates taken from each ranking before fusion when the request does not say; hybrid pages
 /// are cut from this pool. The client may ask for `MIN_POOL..=MAX_POOL`.
 pub const POOL: usize = 100;
